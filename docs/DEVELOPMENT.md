@@ -1,9 +1,40 @@
 # Development
 
-Source layout: `src/main.ts` entry point; `src/server/` WebSocket transport; `src/bridge/` FIFO model; `src/config/` configuration; `src/logging/` logger; `src/status/` status exchange; `src/tools/` test clients; `native/` tray UI; `assets/` icons.
+## Source layout
 
-Development: `npm install`, `npm run dev`.
+```text
+src/main.ts                 server entry point
+src/server/                 WebSocket transport
+src/bridge/                 message and FIFO queue model
+src/config/                 configuration loading/validation
+src/logging/                diagnostic file logger
+src/status/                 tray/server status exchange
+src/tools/                  terminal test clients
+native/                     Windows tray UI/controller
+native/UiIcons.cs           generated tray/application icon
+config/                     runtime config template
+```
 
-Build: `npm run build`, then `Build-VPBridge.cmd`.
+## Development server
 
-Regression: run VPBridge plus `npm run test:vp` and `npm run test:bc`; verify one RECEIVED → QUEUED → SENT sequence and both directions. With buffering disabled, disconnected-destination messages must be dropped and never replayed.
+```bat
+npm install
+npm run dev
+```
+
+## Build
+
+```bat
+npm run build
+Build-VPBridge.cmd
+```
+
+## Transport regression test
+
+Run VPBridge, then use `npm run test:vp` and `npm run test:bc` in separate terminals. Confirm one `RECEIVED → QUEUED → SENT` sequence per message and verify both directions.
+
+Test disconnect behavior with the default buffer disabled: commands must be `DROPPED`, not replayed after reconnect.
+
+## Versioning
+
+Update the package version, server version, native tray/build metadata and CHANGELOG together. Keep generated files (`dist`, runtime, EXE, logs, node_modules) out of Git.
