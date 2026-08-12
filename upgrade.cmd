@@ -3,11 +3,11 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 
 set "REPO_URL=https://github.com/Suenee/VoicePrompterBridge.git"
-set "BRANCH=main"
+set "BRANCH=devel"
 set "WAS_RUNNING=0"
 
 echo ============================================
-echo VoicePrompter Bridge - GitHub upgrade
+echo VoicePrompter Bridge - GitHub DEVEL upgrade
 echo ============================================
 echo.
 
@@ -31,8 +31,6 @@ if not exist ".git" (
     git remote set-url origin "%REPO_URL%"
     git fetch origin "%BRANCH%"
     if errorlevel 1 goto :fail
-    rem reset --hard intentionally replaces old source files that are in the way,
-    rem while files ignored by the new repository (config/logs) remain untouched.
     git reset --hard "origin/%BRANCH%"
     if errorlevel 1 goto :fail
     git branch -M "%BRANCH%"
@@ -51,7 +49,7 @@ if not exist ".git" (
         echo Commit/revert them before running upgrade.cmd.
         goto :fail
     )
-    echo [3/7] Downloading current source from GitHub...
+    echo [3/7] Downloading current DEVEL source from GitHub...
     git fetch origin "%BRANCH%"
     if errorlevel 1 goto :fail
     git checkout "%BRANCH%" >NUL 2>&1
@@ -62,7 +60,6 @@ if not exist ".git" (
 )
 
 echo [4/7] Removing obsolete untracked files...
-rem -f deletes ordinary untracked files; ignored runtime data remains safe.
 git clean -fd
 
 if not exist "config\vpbridge.json" (
@@ -95,14 +92,14 @@ if "%WAS_RUNNING%"=="1" (
 
 echo.
 echo ============================================
-echo UPGRADE COMPLETED SUCCESSFULLY
+echo DEVEL UPGRADE COMPLETED SUCCESSFULLY
 echo ============================================
 exit /b 0
 
 :fail
 echo.
 echo ============================================
-echo UPGRADE FAILED
+echo DEVEL UPGRADE FAILED
 echo ============================================
 echo VPBridge will not be started automatically.
 pause
