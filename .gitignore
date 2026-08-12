@@ -1,0 +1,8 @@
+node_modules/
+dist/
+runtime/
+logs/
+config/vpbridge.json
+VPBridge.exe
+*.log
+.DS_Store

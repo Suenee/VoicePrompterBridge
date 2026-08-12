@@ -1,0 +1,6 @@
+{
+  "server": {"mode":"local","host":"127.0.0.1","port":8170,"vpPath":"/vp","bcPath":"/bc"},
+  "security": {"apiKey":""},
+  "queue": {"maxMessages":1000,"offlineBufferSize":0,"offlineBufferMaxAgeMs":1000},
+  "logging": {"enabled":true,"directory":"./logs","retentionMinutes":60}
+}

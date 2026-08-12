@@ -1,0 +1,2 @@
+import type { BridgeMessage } from './message';
+export class MessageQueue { private readonly items: BridgeMessage[] = []; constructor(private readonly maxMessages: number) {} enqueue(message: BridgeMessage): boolean { if (this.items.length >= this.maxMessages) return false; this.items.push(message); return true; } peek(): BridgeMessage | undefined { return this.items[0]; } dequeue(): BridgeMessage | undefined { return this.items.shift(); } clear(): void { this.items.length = 0; } get length(): number { return this.items.length; } }
