@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0 (devel)
+- Implemented VPP v1 mailbox routing with explicit `from` and `recipient`.
+- Added server-local `ping` method (`recipient: server`).
+- Ping response reports `vp` / `bc` mailbox connection state.
+- Added VPBridge-owned heartbeat interval, default 30000 ms.
+- Added Heartbeat setting to the tray Settings window; clients receive the value through ping.
+- Invalid routing is rejected instead of being forwarded.
+- `devel` updater now follows the `devel` branch.
+
 ## 0.6.6
 - Finalized GitHub-first source layout.
 - `upgrade.cmd` can convert an existing non-Git installation into a clean GitHub working copy.
