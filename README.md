@@ -8,7 +8,7 @@ VoicePrompter  ⇄  /vp  ⇄  VPBridge  ⇄  /bc  ⇄  VoicePrompterModule / Com
 
 The project deliberately keeps the bridge small. It owns WebSocket transport, endpoint connection state, RAM-only FIFO buffering, authentication for LAN access, and diagnostics. Application commands belong to VoicePrompter Protocol (VPP), not to the transport layer, except for explicitly defined server/system methods when implemented.
 
-Current application version: **0.6.5**.
+Current application version: **0.6.6**.
 
 ## Requirements
 
@@ -164,6 +164,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DEVELOPMENT.md](docs/
 - Companion module: `Suenee/companion-module-voiceprompter`
 
 The canonical VPP specification is maintained in `PROTOCOL.md` in the `companion-module-voiceprompter` repository.
+
+## Generated artifacts
+
+The tray application icon is generated from C# drawing code at runtime. No binary icon asset is required in the repository. Generated executables, `dist/`, `runtime/`, `node_modules/`, logs and live configuration are deliberately not stored in Git.
 
 ## License
 
