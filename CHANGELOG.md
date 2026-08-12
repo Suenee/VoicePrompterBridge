@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.6
+- Finalized GitHub-first source layout.
+- `upgrade.cmd` can convert an existing non-Git installation into a clean GitHub working copy.
+- Build outputs and runtime data are excluded from Git; the tray icon is generated from source code, so no binary icon asset is required.
+- `Build-VPBridge.cmd` is non-interactive and safe to call from `upgrade.cmd`.
+- Clean checkout is intended to be fully reproducible from source.
+
 ## 0.6.5
 - `RECEIVED` payload is logged on the same physical line as its status.
 - Corrected typed logger implementation from 0.6.4.
