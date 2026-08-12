@@ -46,9 +46,9 @@ namespace VPBridgeTray
             serverIcon = new PictureBox(); serverText = new Label();
             vpIcon = new PictureBox(); vpText = new Label();
             bcIcon = new PictureBox(); bcText = new Label();
-            statusPanel.Controls.Add(CreateStatusCell(serverIcon, serverText, "Server: Unknown"), 0, 0);
-            statusPanel.Controls.Add(CreateStatusCell(bcIcon, bcText, "BC: Unknown"), 1, 0);
-            statusPanel.Controls.Add(CreateStatusCell(vpIcon, vpText, "VP: Unknown"), 2, 0);
+            statusPanel.Controls.Add(CreateStatusCell(vpIcon, vpText, "VP: Unknown"), 0, 0);
+            statusPanel.Controls.Add(CreateStatusCell(serverIcon, serverText, "Server: Unknown"), 1, 0);
+            statusPanel.Controls.Add(CreateStatusCell(bcIcon, bcText, "BC: Unknown"), 2, 0);
 
             Panel bottom = new Panel(); bottom.Dock = DockStyle.Bottom; bottom.Height = 50; Controls.Add(bottom);
             Button close = new Button(); close.Text = "Close"; close.Anchor = AnchorStyles.Top | AnchorStyles.Right; close.Size = new Size(80, 30); close.Location = new Point(bottom.Width - 95, 10); close.Click += delegate { Close(); }; bottom.Controls.Add(close);
@@ -214,9 +214,9 @@ namespace VPBridgeTray
                 }
             }
             catch { }
+            SetStatus(vpIcon,vpText,"VP",known,vp);
             SetStatus(serverIcon,serverText,"Server",known,server);
             SetStatus(bcIcon,bcText,"BC",known,bc);
-            SetStatus(vpIcon,vpText,"VP",known,vp);
         }
 
         private static void SetStatus(PictureBox p, Label l, string name, bool known, bool value)
