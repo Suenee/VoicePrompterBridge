@@ -10,6 +10,7 @@ namespace VPBridgeTray
     {
         public ServerConfig server { get; set; }
         public SecurityConfig security { get; set; }
+        public HeartbeatConfig heartbeat { get; set; }
         public QueueConfig queue { get; set; }
         public LoggingConfig logging { get; set; }
 
@@ -29,6 +30,7 @@ namespace VPBridgeTray
             if (cfg == null) cfg = new BridgeConfig();
             if (cfg.server == null) cfg.server = new ServerConfig();
             if (cfg.security == null) cfg.security = new SecurityConfig();
+            if (cfg.heartbeat == null) cfg.heartbeat = new HeartbeatConfig();
             if (cfg.queue == null) cfg.queue = new QueueConfig();
             if (cfg.logging == null) cfg.logging = new LoggingConfig();
 
@@ -37,6 +39,7 @@ namespace VPBridgeTray
             if (cfg.server.port < 1 || cfg.server.port > 65535) cfg.server.port = 8170;
             if (String.IsNullOrWhiteSpace(cfg.server.vpPath)) cfg.server.vpPath = "/vp";
             if (String.IsNullOrWhiteSpace(cfg.server.bcPath)) cfg.server.bcPath = "/bc";
+            if (cfg.heartbeat.intervalMs < 5000 || cfg.heartbeat.intervalMs > 3600000) cfg.heartbeat.intervalMs = 30000;
             if (cfg.queue.maxMessages < 1) cfg.queue.maxMessages = 1000;
             if (cfg.queue.offlineBufferSize < 0) cfg.queue.offlineBufferSize = 0;
             if (cfg.queue.offlineBufferMaxAgeMs < 0) cfg.queue.offlineBufferMaxAgeMs = 1000;
@@ -62,6 +65,9 @@ namespace VPBridgeTray
                 "  \"security\": {\r\n" +
                 "    \"apiKey\": \"" + JsonEscape(security.apiKey ?? "") + "\"\r\n" +
                 "  },\r\n" +
+                "  \"heartbeat\": {\r\n" +
+                "    \"intervalMs\": " + heartbeat.intervalMs + "\r\n" +
+                "  },\r\n" +
                 "  \"queue\": {\r\n" +
                 "    \"maxMessages\": " + queue.maxMessages + ",\r\n" +
                 "    \"offlineBufferSize\": " + queue.offlineBufferSize + ",\r\n" +
@@ -80,8 +86,7 @@ namespace VPBridgeTray
         public static string GenerateApiKey()
         {
             byte[] bytes = new byte[32];
-            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
-                rng.GetBytes(bytes);
+            using (RandomNumberGenerator rng = RandomNumberGenerator.Create()) rng.GetBytes(bytes);
             StringBuilder sb = new StringBuilder(64);
             foreach (byte b in bytes) sb.Append(b.ToString("x2"));
             return sb.ToString();
@@ -104,31 +109,9 @@ namespace VPBridgeTray
         }
     }
 
-    internal sealed class ServerConfig
-    {
-        public string mode { get; set; }
-        public string host { get; set; }
-        public int port { get; set; }
-        public string vpPath { get; set; }
-        public string bcPath { get; set; }
-    }
-
-    internal sealed class SecurityConfig
-    {
-        public string apiKey { get; set; }
-    }
-
-    internal sealed class QueueConfig
-    {
-        public int maxMessages { get; set; }
-        public int offlineBufferSize { get; set; }
-        public int offlineBufferMaxAgeMs { get; set; }
-    }
-
-    internal sealed class LoggingConfig
-    {
-        public bool enabled { get; set; }
-        public string directory { get; set; }
-        public int retentionMinutes { get; set; }
-    }
+    internal sealed class ServerConfig { public string mode { get; set; } public string host { get; set; } public int port { get; set; } public string vpPath { get; set; } public string bcPath { get; set; } }
+    internal sealed class SecurityConfig { public string apiKey { get; set; } }
+    internal sealed class HeartbeatConfig { public int intervalMs { get; set; } }
+    internal sealed class QueueConfig { public int maxMessages { get; set; } public int offlineBufferSize { get; set; } public int offlineBufferMaxAgeMs { get; set; } }
+    internal sealed class LoggingConfig { public bool enabled { get; set; } public string directory { get; set; } public int retentionMinutes { get; set; } }
 }
