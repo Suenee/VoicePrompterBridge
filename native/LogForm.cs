@@ -11,7 +11,7 @@ namespace VPBridgeTray
     {
         private readonly string logFile;
         private readonly string statusFile;
-        private readonly TextBox logBox;
+        private readonly RichTextBox logBox;
         private readonly PictureBox serverIcon;
         private readonly PictureBox vpIcon;
         private readonly PictureBox bcIcon;
@@ -55,14 +55,14 @@ namespace VPBridgeTray
             Button clear = new Button(); clear.Text = "Clear"; clear.Anchor = AnchorStyles.Top | AnchorStyles.Right; clear.Size = new Size(80, 30); clear.Location = new Point(bottom.Width - 183, 10); clear.Click += ClearClick; bottom.Controls.Add(clear);
             bottom.Resize += delegate { close.Left = bottom.ClientSize.Width - 95; clear.Left = bottom.ClientSize.Width - 183; };
 
-            logBox = new TextBox();
+            logBox = new RichTextBox();
             logBox.Dock = DockStyle.Fill;
-            logBox.Multiline = true;
             logBox.ReadOnly = true;
-            logBox.ScrollBars = ScrollBars.Both;
             logBox.WordWrap = false;
-            logBox.AcceptsReturn = true;
+            logBox.DetectUrls = false;
             logBox.Font = new Font(FontFamily.GenericMonospace, 9f);
+            logBox.BackColor = SystemColors.Window;
+            logBox.ForeColor = SystemColors.WindowText;
             Controls.Add(logBox);
             logBox.BringToFront();
 
@@ -96,16 +96,13 @@ namespace VPBridgeTray
             cell.WrapContents = false;
             cell.Padding = new Padding(10, 10, 0, 0);
             cell.Margin = Padding.Empty;
-
             icon.Size = new Size(14, 14);
             icon.SizeMode = PictureBoxSizeMode.StretchImage;
             icon.Margin = new Padding(0, 0, 7, 0);
             icon.Image = UiIcons.Create(UiIconKind.Disconnected, 14);
-
             label.Text = initialText;
             label.AutoSize = true;
             label.Margin = new Padding(0, 1, 0, 0);
-
             cell.Controls.Add(icon);
             cell.Controls.Add(label);
             return cell;
@@ -122,15 +119,49 @@ namespace VPBridgeTray
             return text.Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", Environment.NewLine);
         }
 
+        private static Color LogColor(string line)
+        {
+            // Four visual channels. Server replies inherit the colour of the client/server channel.
+            if (line.IndexOf("VP→BC", StringComparison.Ordinal) >= 0) return Color.FromArgb(0, 92, 153);       // blue
+            if (line.IndexOf("BC→VP", StringComparison.Ordinal) >= 0) return Color.FromArgb(126, 70, 160);      // violet
+            if (line.IndexOf("VP→SERVER", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                line.IndexOf("SERVER→VP", StringComparison.OrdinalIgnoreCase) >= 0) return Color.FromArgb(0, 122, 104); // teal
+            if (line.IndexOf("BC→SERVER", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                line.IndexOf("SERVER→BC", StringComparison.OrdinalIgnoreCase) >= 0) return Color.FromArgb(174, 91, 0);  // amber/brown
+            return SystemColors.WindowText;
+        }
+
+        private void AppendColoredText(string text)
+        {
+            if (String.IsNullOrEmpty(text)) return;
+            string normalized = NormalizeLineEndings(text);
+            int start = 0;
+            while (start < normalized.Length)
+            {
+                int end = normalized.IndexOf(Environment.NewLine, start, StringComparison.Ordinal);
+                bool hasNewLine = end >= 0;
+                if (!hasNewLine) end = normalized.Length;
+                string line = normalized.Substring(start, end - start);
+                string output = line + (hasNewLine ? Environment.NewLine : String.Empty);
+                logBox.SelectionStart = logBox.TextLength;
+                logBox.SelectionLength = 0;
+                logBox.SelectionColor = LogColor(line);
+                logBox.AppendText(output);
+                start = hasNewLine ? end + Environment.NewLine.Length : normalized.Length;
+            }
+            logBox.SelectionColor = SystemColors.WindowText;
+        }
+
         private void LoadWholeLog()
         {
             try
             {
-                if (!File.Exists(logFile)) { logBox.Text = ""; lastPosition = 0; return; }
+                logBox.Clear();
+                if (!File.Exists(logFile)) { lastPosition = 0; return; }
                 string text;
                 using (FileStream fs = new FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
                 using (StreamReader sr = new StreamReader(fs, Encoding.UTF8, true)) text = sr.ReadToEnd();
-                logBox.Text = NormalizeLineEndings(text);
+                AppendColoredText(text);
                 lastPosition = new FileInfo(logFile).Length;
                 ScrollToEnd();
             }
@@ -164,8 +195,8 @@ namespace VPBridgeTray
                         long bytesRead = ms.Length;
                         if (bytesRead <= 0) return;
                         lastPosition += bytesRead;
-                        string add = NormalizeLineEndings(Encoding.UTF8.GetString(ms.ToArray()));
-                        if (add.Length > 0) logBox.AppendText(add);
+                        string add = Encoding.UTF8.GetString(ms.ToArray());
+                        if (add.Length > 0) AppendColoredText(add);
                     }
                 }
                 if (wasAtEnd) ScrollToEnd();
