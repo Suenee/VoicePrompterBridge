@@ -5,11 +5,14 @@ using System.Net;
 using System.Net.Sockets;
 using System.Net.NetworkInformation;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace VPBridgeTray
 {
     internal sealed class SettingsForm : Form
     {
+        private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        private const string RunValueName = "VoicePrompterBridge";
         private readonly string configFile;
         private readonly Action onSaved;
         private readonly Func<bool> isServerRunning;
@@ -19,6 +22,7 @@ namespace VPBridgeTray
         private readonly NumericUpDown portBox;
         private readonly NumericUpDown heartbeatBox;
         private readonly TextBox apiKeyBox;
+        private readonly CheckBox startWithWindowsBox;
         private readonly Button copyButton;
         private readonly Button regenerateButton;
         private readonly Button saveButton;
@@ -38,7 +42,7 @@ namespace VPBridgeTray
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
-            ClientSize = new Size(500, 380);
+            ClientSize = new Size(500, 425);
 
             Controls.Add(Title("Network", 20, 18));
             localRadio = new RadioButton(); localRadio.Text = "Local only (127.0.0.1)"; localRadio.Location = new Point(30, 55); localRadio.AutoSize = true;
@@ -65,8 +69,16 @@ namespace VPBridgeTray
             Label note = new Label(); note.Text = "WS:// is used. In Local only mode the API key is not required for connections."; note.Location = new Point(30, 240); note.Size = new Size(440, 36); note.ForeColor = Color.DimGray; Controls.Add(note);
             Label heartbeatNote = new Label(); heartbeatNote.Text = "Clients add a fixed 5 second grace period to the configured heartbeat."; heartbeatNote.Location = new Point(30, 278); heartbeatNote.Size = new Size(440, 30); heartbeatNote.ForeColor = Color.DimGray; Controls.Add(heartbeatNote);
 
-            saveButton = new Button(); saveButton.Text = "Save"; saveButton.Location = new Point(315, 332); saveButton.Size = new Size(75, 30); saveButton.Click += SaveClick; Controls.Add(saveButton);
-            cancelButton = new Button(); cancelButton.Text = "Cancel"; cancelButton.Location = new Point(398, 332); cancelButton.Size = new Size(75, 30); cancelButton.Click += delegate { Close(); }; Controls.Add(cancelButton);
+            Controls.Add(Title("Windows", 20, 315));
+            startWithWindowsBox = new CheckBox();
+            startWithWindowsBox.Text = "Start with Windows";
+            startWithWindowsBox.Location = new Point(30, 345);
+            startWithWindowsBox.AutoSize = true;
+            tips.SetToolTip(startWithWindowsBox, "Start VoicePrompter Bridge automatically when the current user signs in to Windows.");
+            Controls.Add(startWithWindowsBox);
+
+            saveButton = new Button(); saveButton.Text = "Save"; saveButton.Location = new Point(315, 377); saveButton.Size = new Size(75, 30); saveButton.Click += SaveClick; Controls.Add(saveButton);
+            cancelButton = new Button(); cancelButton.Text = "Cancel"; cancelButton.Location = new Point(398, 377); cancelButton.Size = new Size(75, 30); cancelButton.Click += delegate { Close(); }; Controls.Add(cancelButton);
             AcceptButton = saveButton; CancelButton = cancelButton;
 
             localRadio.Checked = original.server.mode != "all";
@@ -74,11 +86,42 @@ namespace VPBridgeTray
             portBox.Value = original.server.port;
             heartbeatBox.Value = Math.Max(5, Math.Min(3600, original.heartbeat.intervalMs / 1000));
             apiKeyBox.Text = BridgeConfig.IsValidApiKey(original.security.apiKey) ? original.security.apiKey : BridgeConfig.GenerateApiKey();
+            startWithWindowsBox.Checked = IsStartWithWindowsEnabled();
         }
 
         private static Label Title(string text, int x, int y) { Label l = new Label(); l.Text = text; l.Location = new Point(x,y); l.AutoSize = true; l.Font = new Font(SystemFonts.MessageBoxFont, FontStyle.Bold); return l; }
         private void CopyClick(object sender, EventArgs e) { try { Clipboard.SetText(apiKeyBox.Text); } catch { } }
         private void RegenerateClick(object sender, EventArgs e) { apiKeyBox.Text = BridgeConfig.GenerateApiKey(); }
+
+        private static string StartupCommand()
+        {
+            string exe = Application.ExecutablePath;
+            return "\"" + exe + "\"";
+        }
+
+        private static bool IsStartWithWindowsEnabled()
+        {
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunKeyPath, false))
+                {
+                    object value = key == null ? null : key.GetValue(RunValueName);
+                    if (value == null) return false;
+                    return String.Equals(Convert.ToString(value), StartupCommand(), StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch { return false; }
+        }
+
+        private static void SetStartWithWindows(bool enabled)
+        {
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(RunKeyPath))
+            {
+                if (key == null) throw new InvalidOperationException("Could not open the Windows startup registry key.");
+                if (enabled) key.SetValue(RunValueName, StartupCommand(), RegistryValueKind.String);
+                else key.DeleteValue(RunValueName, false);
+            }
+        }
 
         private void SaveClick(object sender, EventArgs e)
         {
@@ -96,7 +139,11 @@ namespace VPBridgeTray
             cfg.server.port = port;
             cfg.security.apiKey = key;
             cfg.heartbeat.intervalMs = heartbeatMs;
-            try { cfg.Save(configFile); }
+            try
+            {
+                cfg.Save(configFile);
+                SetStartWithWindows(startWithWindowsBox.Checked);
+            }
             catch (Exception ex) { MessageBox.Show("Could not save configuration:\r\n" + ex.Message, "VPBridge Settings", MessageBoxButtons.OK, MessageBoxIcon.Error); return; }
             if (onSaved != null) onSaved();
             Close();
