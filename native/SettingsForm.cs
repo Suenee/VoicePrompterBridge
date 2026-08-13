@@ -42,7 +42,7 @@ namespace VPBridgeTray
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
-            ClientSize = new Size(500, 425);
+            ClientSize = new Size(500, 380);
 
             Controls.Add(Title("Network", 20, 18));
             localRadio = new RadioButton(); localRadio.Text = "Local only (127.0.0.1)"; localRadio.Location = new Point(30, 55); localRadio.AutoSize = true;
@@ -69,16 +69,15 @@ namespace VPBridgeTray
             Label note = new Label(); note.Text = "WS:// is used. In Local only mode the API key is not required for connections."; note.Location = new Point(30, 240); note.Size = new Size(440, 36); note.ForeColor = Color.DimGray; Controls.Add(note);
             Label heartbeatNote = new Label(); heartbeatNote.Text = "Clients add a fixed 5 second grace period to the configured heartbeat."; heartbeatNote.Location = new Point(30, 278); heartbeatNote.Size = new Size(440, 30); heartbeatNote.ForeColor = Color.DimGray; Controls.Add(heartbeatNote);
 
-            Controls.Add(Title("Windows", 20, 315));
             startWithWindowsBox = new CheckBox();
             startWithWindowsBox.Text = "Start with Windows";
-            startWithWindowsBox.Location = new Point(30, 345);
+            startWithWindowsBox.Location = new Point(30, 339);
             startWithWindowsBox.AutoSize = true;
             tips.SetToolTip(startWithWindowsBox, "Start VoicePrompter Bridge automatically when the current user signs in to Windows.");
             Controls.Add(startWithWindowsBox);
 
-            saveButton = new Button(); saveButton.Text = "Save"; saveButton.Location = new Point(315, 377); saveButton.Size = new Size(75, 30); saveButton.Click += SaveClick; Controls.Add(saveButton);
-            cancelButton = new Button(); cancelButton.Text = "Cancel"; cancelButton.Location = new Point(398, 377); cancelButton.Size = new Size(75, 30); cancelButton.Click += delegate { Close(); }; Controls.Add(cancelButton);
+            saveButton = new Button(); saveButton.Text = "Save"; saveButton.Location = new Point(315, 332); saveButton.Size = new Size(75, 30); saveButton.Click += SaveClick; Controls.Add(saveButton);
+            cancelButton = new Button(); cancelButton.Text = "Cancel"; cancelButton.Location = new Point(398, 332); cancelButton.Size = new Size(75, 30); cancelButton.Click += delegate { Close(); }; Controls.Add(cancelButton);
             AcceptButton = saveButton; CancelButton = cancelButton;
 
             localRadio.Checked = original.server.mode != "all";
