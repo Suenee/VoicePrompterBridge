@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Text;
@@ -20,6 +21,13 @@ namespace VPBridgeTray
         private readonly Label bcText;
         private readonly FileSystemWatcher watcher;
         private readonly Timer statusTimer;
+        private readonly CheckBox autoScrollCheck;
+        private readonly CheckBox showPingCheck;
+        private readonly CheckBox showVpCheck;
+        private readonly CheckBox showBcCheck;
+        private readonly TextBox searchBox;
+        private readonly Button clearSearchButton;
+        private readonly List<string> allLines = new List<string>();
         private long lastPosition;
 
         public LogForm(string logFile, string statusFile, Icon icon)
@@ -29,19 +37,23 @@ namespace VPBridgeTray
             Text = "VoicePrompter Bridge - Log";
             Icon = icon;
             StartPosition = FormStartPosition.CenterScreen;
-            Size = new Size(900, 580);
-            MinimumSize = new Size(620, 380);
+            Size = new Size(900, 620);
+            MinimumSize = new Size(700, 420);
             SizeGripStyle = SizeGripStyle.Show;
 
+            Panel topPanel = new Panel();
+            topPanel.Dock = DockStyle.Top;
+            topPanel.Height = 42;
+            Controls.Add(topPanel);
+
             TableLayoutPanel statusPanel = new TableLayoutPanel();
-            statusPanel.Dock = DockStyle.Top;
-            statusPanel.Height = 42;
+            statusPanel.Dock = DockStyle.Fill;
             statusPanel.ColumnCount = 3;
             statusPanel.RowCount = 1;
             statusPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34f));
             statusPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33f));
             statusPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33f));
-            Controls.Add(statusPanel);
+            topPanel.Controls.Add(statusPanel);
 
             serverIcon = new PictureBox(); serverText = new Label();
             vpIcon = new PictureBox(); vpText = new Label();
@@ -50,10 +62,61 @@ namespace VPBridgeTray
             statusPanel.Controls.Add(CreateStatusCell(serverIcon, serverText, "Server: Unknown"), 1, 0);
             statusPanel.Controls.Add(CreateStatusCell(bcIcon, bcText, "BC: Unknown"), 2, 0);
 
-            Panel bottom = new Panel(); bottom.Dock = DockStyle.Bottom; bottom.Height = 50; Controls.Add(bottom);
-            Button close = new Button(); close.Text = "Close"; close.Anchor = AnchorStyles.Top | AnchorStyles.Right; close.Size = new Size(80, 30); close.Location = new Point(bottom.Width - 95, 10); close.Click += delegate { Close(); }; bottom.Controls.Add(close);
-            Button clear = new Button(); clear.Text = "Clear"; clear.Anchor = AnchorStyles.Top | AnchorStyles.Right; clear.Size = new Size(80, 30); clear.Location = new Point(bottom.Width - 183, 10); clear.Click += ClearClick; bottom.Controls.Add(clear);
-            bottom.Resize += delegate { close.Left = bottom.ClientSize.Width - 95; clear.Left = bottom.ClientSize.Width - 183; };
+            clearSearchButton = new Button();
+            clearSearchButton.Text = "×";
+            clearSearchButton.Font = new Font(Font.FontFamily, 12f, FontStyle.Bold);
+            clearSearchButton.Size = new Size(30, 24);
+            clearSearchButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            clearSearchButton.Location = new Point(topPanel.ClientSize.Width - 12 - clearSearchButton.Width, 9);
+            clearSearchButton.TabStop = false;
+            clearSearchButton.Click += delegate { searchBox.Text = String.Empty; searchBox.Focus(); };
+            topPanel.Controls.Add(clearSearchButton);
+            clearSearchButton.BringToFront();
+
+            searchBox = new TextBox();
+            searchBox.Size = new Size(180, 24);
+            searchBox.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            searchBox.Location = new Point(clearSearchButton.Left - searchBox.Width - 4, 10);
+            searchBox.TextChanged += delegate { RebuildVisibleLog(false); };
+            topPanel.Controls.Add(searchBox);
+            searchBox.BringToFront();
+            SetCueBanner(searchBox, "Search...");
+
+            topPanel.Resize += delegate
+            {
+                clearSearchButton.Left = topPanel.ClientSize.Width - 12 - clearSearchButton.Width;
+                searchBox.Left = clearSearchButton.Left - searchBox.Width - 4;
+            };
+
+            Panel filterPanel = new Panel();
+            filterPanel.Dock = DockStyle.Bottom;
+            filterPanel.Height = 42;
+            Controls.Add(filterPanel);
+
+            FlowLayoutPanel filters = new FlowLayoutPanel();
+            filters.Dock = DockStyle.Left;
+            filters.AutoSize = true;
+            filters.WrapContents = false;
+            filters.Padding = new Padding(12, 10, 0, 0);
+            filterPanel.Controls.Add(filters);
+
+            autoScrollCheck = CreateFilterCheckBox("Always at end", true);
+            showPingCheck = CreateFilterCheckBox("Show ping", true);
+            showVpCheck = CreateFilterCheckBox("VP messages", true);
+            showBcCheck = CreateFilterCheckBox("BC messages", true);
+            filters.Controls.Add(autoScrollCheck);
+            filters.Controls.Add(showPingCheck);
+            filters.Controls.Add(showVpCheck);
+            filters.Controls.Add(showBcCheck);
+
+            autoScrollCheck.CheckedChanged += delegate { if (autoScrollCheck.Checked) ScrollToEnd(); };
+            showPingCheck.CheckedChanged += FilterChanged;
+            showVpCheck.CheckedChanged += FilterChanged;
+            showBcCheck.CheckedChanged += FilterChanged;
+
+            Button close = new Button(); close.Text = "Close"; close.Anchor = AnchorStyles.Top | AnchorStyles.Right; close.Size = new Size(80, 30); close.Location = new Point(filterPanel.Width - 95, 6); close.Click += delegate { Close(); }; filterPanel.Controls.Add(close);
+            Button clear = new Button(); clear.Text = "Clear"; clear.Anchor = AnchorStyles.Top | AnchorStyles.Right; clear.Size = new Size(80, 30); clear.Location = new Point(filterPanel.Width - 183, 6); clear.Click += ClearClick; filterPanel.Controls.Add(clear);
+            filterPanel.Resize += delegate { close.Left = filterPanel.ClientSize.Width - 95; clear.Left = filterPanel.ClientSize.Width - 183; };
 
             logBox = new RichTextBox();
             logBox.Dock = DockStyle.Fill;
@@ -75,7 +138,7 @@ namespace VPBridgeTray
             watcher.EnableRaisingEvents = true;
 
             statusTimer = new Timer(); statusTimer.Interval = 500; statusTimer.Tick += delegate { RefreshStatus(); }; statusTimer.Start(); RefreshStatus();
-            Shown += delegate { BeginInvoke((MethodInvoker)delegate { ScrollToEnd(); }); };
+            Shown += delegate { BeginInvoke((MethodInvoker)delegate { if (autoScrollCheck.Checked) ScrollToEnd(); }); };
         }
 
         protected override void Dispose(bool disposing)
@@ -86,6 +149,25 @@ namespace VPBridgeTray
                 if (statusTimer != null) statusTimer.Dispose();
             }
             base.Dispose(disposing);
+        }
+
+        private static CheckBox CreateFilterCheckBox(string text, bool value)
+        {
+            CheckBox c = new CheckBox();
+            c.Text = text;
+            c.Checked = value;
+            c.AutoSize = true;
+            c.Margin = new Padding(0, 0, 18, 0);
+            return c;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, string lParam);
+
+        private static void SetCueBanner(TextBox box, string text)
+        {
+            const int EM_SETCUEBANNER = 0x1501;
+            try { SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, text); } catch { }
         }
 
         private static Control CreateStatusCell(PictureBox icon, Label label, string initialText)
@@ -108,6 +190,11 @@ namespace VPBridgeTray
             return cell;
         }
 
+        private void FilterChanged(object sender, EventArgs e)
+        {
+            RebuildVisibleLog(false);
+        }
+
         private void WatcherChanged(object sender, FileSystemEventArgs e)
         {
             try { BeginInvoke((MethodInvoker)delegate { AppendNewLogContent(); }); } catch { }
@@ -121,49 +208,106 @@ namespace VPBridgeTray
 
         private static Color LogColor(string line)
         {
-            // Four visual channels. Server replies inherit the colour of the client/server channel.
-            if (line.IndexOf("VP→BC", StringComparison.Ordinal) >= 0) return Color.FromArgb(0, 92, 153);       // blue
-            if (line.IndexOf("BC→VP", StringComparison.Ordinal) >= 0) return Color.FromArgb(126, 70, 160);      // violet
+            if (line.IndexOf("VP→BC", StringComparison.Ordinal) >= 0) return Color.FromArgb(0, 92, 153);
+            if (line.IndexOf("BC→VP", StringComparison.Ordinal) >= 0) return Color.FromArgb(126, 70, 160);
             if (line.IndexOf("VP→SERVER", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                line.IndexOf("SERVER→VP", StringComparison.OrdinalIgnoreCase) >= 0) return Color.FromArgb(0, 122, 104); // teal
+                line.IndexOf("SERVER→VP", StringComparison.OrdinalIgnoreCase) >= 0) return Color.FromArgb(0, 122, 104);
             if (line.IndexOf("BC→SERVER", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                line.IndexOf("SERVER→BC", StringComparison.OrdinalIgnoreCase) >= 0) return Color.FromArgb(174, 91, 0);  // amber/brown
+                line.IndexOf("SERVER→BC", StringComparison.OrdinalIgnoreCase) >= 0) return Color.FromArgb(174, 91, 0);
             return SystemColors.WindowText;
         }
 
-        private void AppendColoredText(string text)
+        private static bool IsPingLine(string line)
         {
-            if (String.IsNullOrEmpty(text)) return;
+            return line.IndexOf("→SERVER", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   line.IndexOf("SERVER→", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsVpLine(string line)
+        {
+            return line.IndexOf("VP→", StringComparison.Ordinal) >= 0 ||
+                   line.IndexOf("→VP", StringComparison.Ordinal) >= 0;
+        }
+
+        private static bool IsBcLine(string line)
+        {
+            return line.IndexOf("BC→", StringComparison.Ordinal) >= 0 ||
+                   line.IndexOf("→BC", StringComparison.Ordinal) >= 0;
+        }
+
+        private bool ShouldShowLine(string line)
+        {
+            if (!showPingCheck.Checked && IsPingLine(line)) return false;
+
+            bool vp = IsVpLine(line);
+            bool bc = IsBcLine(line);
+            if (vp && !bc && !showVpCheck.Checked) return false;
+            if (bc && !vp && !showBcCheck.Checked) return false;
+            if (vp && bc && !showVpCheck.Checked && !showBcCheck.Checked) return false;
+
+            string query = searchBox.Text.Trim();
+            if (query.Length > 0 && line.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0) return false;
+            return true;
+        }
+
+        private static IEnumerable<string> SplitLines(string text)
+        {
             string normalized = NormalizeLineEndings(text);
-            int start = 0;
-            while (start < normalized.Length)
+            if (normalized.Length == 0) yield break;
+            string[] lines = normalized.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+            for (int i = 0; i < lines.Length; i++)
             {
-                int end = normalized.IndexOf(Environment.NewLine, start, StringComparison.Ordinal);
-                bool hasNewLine = end >= 0;
-                if (!hasNewLine) end = normalized.Length;
-                string line = normalized.Substring(start, end - start);
-                string output = line + (hasNewLine ? Environment.NewLine : String.Empty);
-                logBox.SelectionStart = logBox.TextLength;
-                logBox.SelectionLength = 0;
-                logBox.SelectionColor = LogColor(line);
-                logBox.AppendText(output);
-                start = hasNewLine ? end + Environment.NewLine.Length : normalized.Length;
+                if (i == lines.Length - 1 && lines[i].Length == 0) continue;
+                yield return lines[i];
             }
+        }
+
+        private void AppendVisibleLine(string line)
+        {
+            if (!ShouldShowLine(line)) return;
+            logBox.SelectionStart = logBox.TextLength;
+            logBox.SelectionLength = 0;
+            logBox.SelectionColor = LogColor(line);
+            logBox.AppendText(line + Environment.NewLine);
             logBox.SelectionColor = SystemColors.WindowText;
+        }
+
+        private void AddRawText(string text)
+        {
+            foreach (string line in SplitLines(text))
+            {
+                allLines.Add(line);
+                AppendVisibleLine(line);
+            }
+        }
+
+        private void RebuildVisibleLog(bool forceScroll)
+        {
+            int oldSelection = logBox.SelectionStart;
+            logBox.SuspendLayout();
+            try
+            {
+                logBox.Clear();
+                foreach (string line in allLines) AppendVisibleLine(line);
+                if (forceScroll || autoScrollCheck.Checked) ScrollToEnd();
+                else logBox.SelectionStart = Math.Min(oldSelection, logBox.TextLength);
+            }
+            finally { logBox.ResumeLayout(); }
         }
 
         private void LoadWholeLog()
         {
             try
             {
+                allLines.Clear();
                 logBox.Clear();
                 if (!File.Exists(logFile)) { lastPosition = 0; return; }
                 string text;
                 using (FileStream fs = new FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
                 using (StreamReader sr = new StreamReader(fs, Encoding.UTF8, true)) text = sr.ReadToEnd();
-                AppendColoredText(text);
+                AddRawText(text);
                 lastPosition = new FileInfo(logFile).Length;
-                ScrollToEnd();
+                if (autoScrollCheck.Checked) ScrollToEnd();
             }
             catch { }
         }
@@ -173,7 +317,6 @@ namespace VPBridgeTray
             try
             {
                 if (!File.Exists(logFile)) return;
-                bool wasAtEnd = logBox.SelectionStart >= Math.Max(0, logBox.TextLength - 2);
                 using (FileStream fs = new FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
                 {
                     if (fs.Length < lastPosition) { LoadWholeLog(); return; }
@@ -196,10 +339,10 @@ namespace VPBridgeTray
                         if (bytesRead <= 0) return;
                         lastPosition += bytesRead;
                         string add = Encoding.UTF8.GetString(ms.ToArray());
-                        if (add.Length > 0) AppendColoredText(add);
+                        if (add.Length > 0) AddRawText(add);
                     }
                 }
-                if (wasAtEnd) ScrollToEnd();
+                if (autoScrollCheck.Checked) ScrollToEnd();
             }
             catch { }
         }
@@ -214,7 +357,9 @@ namespace VPBridgeTray
                 string dir = Path.GetDirectoryName(logFile); if (String.IsNullOrEmpty(dir)) dir = ".";
                 Directory.CreateDirectory(dir);
                 using (FileStream fs = new FileStream(logFile, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)) { }
-                logBox.Clear(); lastPosition = 0;
+                allLines.Clear();
+                logBox.Clear();
+                lastPosition = 0;
             }
             catch (Exception ex) { MessageBox.Show("Could not clear the log:\r\n" + ex.Message, "VPBridge Log", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
