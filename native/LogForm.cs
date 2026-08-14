@@ -41,52 +41,51 @@ namespace VPBridgeTray
             MinimumSize = new Size(700, 420);
             SizeGripStyle = SizeGripStyle.Show;
 
-            Panel topPanel = new Panel();
+            TableLayoutPanel topPanel = new TableLayoutPanel();
             topPanel.Dock = DockStyle.Top;
             topPanel.Height = 42;
+            topPanel.ColumnCount = 4;
+            topPanel.RowCount = 1;
+            topPanel.Margin = Padding.Empty;
+            topPanel.Padding = Padding.Empty;
+            topPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+            topPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+            topPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+            topPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
             Controls.Add(topPanel);
-
-            TableLayoutPanel statusPanel = new TableLayoutPanel();
-            statusPanel.Dock = DockStyle.Fill;
-            statusPanel.ColumnCount = 3;
-            statusPanel.RowCount = 1;
-            statusPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34f));
-            statusPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33f));
-            statusPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33f));
-            topPanel.Controls.Add(statusPanel);
 
             serverIcon = new PictureBox(); serverText = new Label();
             vpIcon = new PictureBox(); vpText = new Label();
             bcIcon = new PictureBox(); bcText = new Label();
-            statusPanel.Controls.Add(CreateStatusCell(vpIcon, vpText, "VP: Unknown"), 0, 0);
-            statusPanel.Controls.Add(CreateStatusCell(serverIcon, serverText, "Server: Unknown"), 1, 0);
-            statusPanel.Controls.Add(CreateStatusCell(bcIcon, bcText, "BC: Unknown"), 2, 0);
+            topPanel.Controls.Add(CreateStatusCell(vpIcon, vpText, "VP: Unknown"), 0, 0);
+            topPanel.Controls.Add(CreateStatusCell(serverIcon, serverText, "Server: Unknown"), 1, 0);
+            topPanel.Controls.Add(CreateStatusCell(bcIcon, bcText, "BC: Unknown"), 2, 0);
+
+            TableLayoutPanel searchPanel = new TableLayoutPanel();
+            searchPanel.Dock = DockStyle.Fill;
+            searchPanel.ColumnCount = 2;
+            searchPanel.RowCount = 1;
+            searchPanel.Padding = new Padding(4, 8, 8, 7);
+            searchPanel.Margin = Padding.Empty;
+            searchPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            searchPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 34f));
+            topPanel.Controls.Add(searchPanel, 3, 0);
+
+            searchBox = new TextBox();
+            searchBox.Dock = DockStyle.Fill;
+            searchBox.Margin = new Padding(0, 1, 4, 0);
+            searchBox.TextChanged += delegate { RebuildVisibleLog(false); };
+            searchPanel.Controls.Add(searchBox, 0, 0);
+            SetCueBanner(searchBox, "Search...");
 
             clearSearchButton = new Button();
             clearSearchButton.Text = "×";
             clearSearchButton.Font = new Font(Font.FontFamily, 12f, FontStyle.Bold);
-            clearSearchButton.Size = new Size(30, 24);
-            clearSearchButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            clearSearchButton.Location = new Point(topPanel.ClientSize.Width - 12 - clearSearchButton.Width, 9);
+            clearSearchButton.Dock = DockStyle.Fill;
+            clearSearchButton.Margin = Padding.Empty;
             clearSearchButton.TabStop = false;
             clearSearchButton.Click += delegate { searchBox.Text = String.Empty; searchBox.Focus(); };
-            topPanel.Controls.Add(clearSearchButton);
-            clearSearchButton.BringToFront();
-
-            searchBox = new TextBox();
-            searchBox.Size = new Size(180, 24);
-            searchBox.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            searchBox.Location = new Point(clearSearchButton.Left - searchBox.Width - 4, 10);
-            searchBox.TextChanged += delegate { RebuildVisibleLog(false); };
-            topPanel.Controls.Add(searchBox);
-            searchBox.BringToFront();
-            SetCueBanner(searchBox, "Search...");
-
-            topPanel.Resize += delegate
-            {
-                clearSearchButton.Left = topPanel.ClientSize.Width - 12 - clearSearchButton.Width;
-                searchBox.Left = clearSearchButton.Left - searchBox.Width - 4;
-            };
+            searchPanel.Controls.Add(clearSearchButton, 1, 0);
 
             Panel filterPanel = new Panel();
             filterPanel.Dock = DockStyle.Bottom;
