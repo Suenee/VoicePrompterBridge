@@ -90,10 +90,7 @@ namespace VPBridgeTray
             searchPanel.Controls.Add(clearSearchButton);
             clearSearchButton.BringToFront();
 
-            searchPanel.Resize += delegate
-            {
-                clearSearchButton.Left = searchPanel.ClientSize.Width - 29;
-            };
+            searchPanel.Resize += delegate { clearSearchButton.Left = searchPanel.ClientSize.Width - 29; };
             searchBox.TextChanged += delegate
             {
                 clearSearchButton.Visible = searchBox.TextLength > 0;
@@ -222,19 +219,56 @@ namespace VPBridgeTray
             for (int i = 0; i < lines.Length; i++) { if (i == lines.Length - 1 && lines[i].Length == 0) continue; yield return lines[i]; }
         }
 
-        private void AppendVisibleLine(string line) { if (!ShouldShowLine(line)) return; logBox.SelectionStart = logBox.TextLength; logBox.SelectionLength = 0; logBox.SelectionColor = LogColor(line); logBox.AppendText(line + Environment.NewLine); logBox.SelectionColor = SystemColors.WindowText; }
-        private void AddRawText(string text) { foreach (string line in SplitLines(text)) { allLines.Add(line); AppendVisibleLine(line); } }
+        private bool AppendVisibleLine(string line)
+        {
+            if (!ShouldShowLine(line)) return false;
+            logBox.SelectionStart = logBox.TextLength;
+            logBox.SelectionLength = 0;
+            logBox.SelectionColor = LogColor(line);
+            logBox.AppendText(line + Environment.NewLine);
+            logBox.SelectionColor = SystemColors.WindowText;
+            return true;
+        }
+
+        private int AddRawText(string text)
+        {
+            int visibleAdded = 0;
+            foreach (string line in SplitLines(text))
+            {
+                allLines.Add(line);
+                if (AppendVisibleLine(line)) visibleAdded++;
+            }
+            return visibleAdded;
+        }
 
         private void RebuildVisibleLog(bool forceScroll)
         {
             int oldSelection = logBox.SelectionStart; logBox.SuspendLayout();
-            try { logBox.Clear(); foreach (string line in allLines) AppendVisibleLine(line); if (forceScroll || autoScrollCheck.Checked) ScrollToEnd(); else logBox.SelectionStart = Math.Min(oldSelection, logBox.TextLength); }
+            try
+            {
+                logBox.Clear();
+                foreach (string line in allLines) AppendVisibleLine(line);
+                if (forceScroll || autoScrollCheck.Checked) ScrollToEnd();
+                else logBox.SelectionStart = Math.Min(oldSelection, logBox.TextLength);
+            }
             finally { logBox.ResumeLayout(); }
         }
 
         private void LoadWholeLog()
         {
-            try { allLines.Clear(); logBox.Clear(); if (!File.Exists(logFile)) { lastPosition = 0; return; } string text; using (FileStream fs = new FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) using (StreamReader sr = new StreamReader(fs, Encoding.UTF8, true)) text = sr.ReadToEnd(); AddRawText(text); lastPosition = new FileInfo(logFile).Length; if (autoScrollCheck.Checked) ScrollToEnd(); } catch { }
+            try
+            {
+                allLines.Clear();
+                logBox.Clear();
+                if (!File.Exists(logFile)) { lastPosition = 0; return; }
+                string text;
+                using (FileStream fs = new FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (StreamReader sr = new StreamReader(fs, Encoding.UTF8, true)) text = sr.ReadToEnd();
+                int visibleAdded = AddRawText(text);
+                lastPosition = new FileInfo(logFile).Length;
+                if (visibleAdded > 0 && autoScrollCheck.Checked) ScrollToEnd();
+            }
+            catch { }
         }
 
         private void AppendNewLogContent()
@@ -242,6 +276,7 @@ namespace VPBridgeTray
             try
             {
                 if (!File.Exists(logFile)) return;
+                int visibleAdded = 0;
                 using (FileStream fs = new FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
                 {
                     if (fs.Length < lastPosition) { LoadWholeLog(); return; }
@@ -250,10 +285,11 @@ namespace VPBridgeTray
                     {
                         byte[] buffer = new byte[8192];
                         while (remaining > 0) { int wanted = (int)Math.Min((long)buffer.Length, remaining); int read = fs.Read(buffer, 0, wanted); if (read <= 0) break; ms.Write(buffer, 0, read); remaining -= read; }
-                        long bytesRead = ms.Length; if (bytesRead <= 0) return; lastPosition += bytesRead; string add = Encoding.UTF8.GetString(ms.ToArray()); if (add.Length > 0) AddRawText(add);
+                        long bytesRead = ms.Length; if (bytesRead <= 0) return; lastPosition += bytesRead; string add = Encoding.UTF8.GetString(ms.ToArray()); if (add.Length > 0) visibleAdded = AddRawText(add);
                     }
                 }
-                if (autoScrollCheck.Checked) ScrollToEnd();
+                // Do not touch the RichTextBox at all when every new line is hidden by the current filters/search.
+                if (visibleAdded > 0 && autoScrollCheck.Checked) ScrollToEnd();
             }
             catch { }
         }
