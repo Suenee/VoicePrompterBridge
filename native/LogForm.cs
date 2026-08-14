@@ -191,7 +191,15 @@ namespace VPBridgeTray
             if (line.IndexOf("BC→SERVER", StringComparison.OrdinalIgnoreCase) >= 0 || line.IndexOf("SERVER→BC", StringComparison.OrdinalIgnoreCase) >= 0) return Color.FromArgb(174, 91, 0);
             return SystemColors.WindowText;
         }
-        private static bool IsPingLine(string line) { return line.IndexOf("→SERVER", StringComparison.OrdinalIgnoreCase) >= 0 || line.IndexOf("SERVER→", StringComparison.OrdinalIgnoreCase) >= 0; }
+
+        private static bool IsPingLine(string line)
+        {
+            return line.IndexOf("→SERVER", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   line.IndexOf("SERVER→", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   line.IndexOf("\"method\":\"ping\"", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   line.IndexOf("\"method\": \"ping\"", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         private static bool IsVpLine(string line) { return line.IndexOf("VP→", StringComparison.Ordinal) >= 0 || line.IndexOf("→VP", StringComparison.Ordinal) >= 0; }
         private static bool IsBcLine(string line) { return line.IndexOf("BC→", StringComparison.Ordinal) >= 0 || line.IndexOf("→BC", StringComparison.Ordinal) >= 0; }
 
@@ -213,18 +221,22 @@ namespace VPBridgeTray
             string[] lines = normalized.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
             for (int i = 0; i < lines.Length; i++) { if (i == lines.Length - 1 && lines[i].Length == 0) continue; yield return lines[i]; }
         }
+
         private void AppendVisibleLine(string line) { if (!ShouldShowLine(line)) return; logBox.SelectionStart = logBox.TextLength; logBox.SelectionLength = 0; logBox.SelectionColor = LogColor(line); logBox.AppendText(line + Environment.NewLine); logBox.SelectionColor = SystemColors.WindowText; }
         private void AddRawText(string text) { foreach (string line in SplitLines(text)) { allLines.Add(line); AppendVisibleLine(line); } }
+
         private void RebuildVisibleLog(bool forceScroll)
         {
             int oldSelection = logBox.SelectionStart; logBox.SuspendLayout();
             try { logBox.Clear(); foreach (string line in allLines) AppendVisibleLine(line); if (forceScroll || autoScrollCheck.Checked) ScrollToEnd(); else logBox.SelectionStart = Math.Min(oldSelection, logBox.TextLength); }
             finally { logBox.ResumeLayout(); }
         }
+
         private void LoadWholeLog()
         {
             try { allLines.Clear(); logBox.Clear(); if (!File.Exists(logFile)) { lastPosition = 0; return; } string text; using (FileStream fs = new FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) using (StreamReader sr = new StreamReader(fs, Encoding.UTF8, true)) text = sr.ReadToEnd(); AddRawText(text); lastPosition = new FileInfo(logFile).Length; if (autoScrollCheck.Checked) ScrollToEnd(); } catch { }
         }
+
         private void AppendNewLogContent()
         {
             try
@@ -245,6 +257,7 @@ namespace VPBridgeTray
             }
             catch { }
         }
+
         private void ScrollToEnd() { logBox.SelectionStart = logBox.TextLength; logBox.SelectionLength = 0; logBox.ScrollToCaret(); }
 
         private void ClearClick(object sender, EventArgs e)
@@ -253,6 +266,7 @@ namespace VPBridgeTray
             try { string dir = Path.GetDirectoryName(logFile); if (String.IsNullOrEmpty(dir)) dir = "."; Directory.CreateDirectory(dir); using (FileStream fs = new FileStream(logFile, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)) { } allLines.Clear(); logBox.Clear(); lastPosition = 0; }
             catch (Exception ex) { MessageBox.Show("Could not clear the log:\r\n" + ex.Message, "VPBridge Log", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
+
         private bool ConfirmClear()
         {
             using (Form f = new Form())
@@ -264,17 +278,25 @@ namespace VPBridgeTray
                 f.AcceptButton=yes; f.CancelButton=cancel; return f.ShowDialog(this)==DialogResult.Yes;
             }
         }
+
         private void RefreshStatus()
         {
             bool server=false, vp=false, bc=false, known=false;
             try { if (File.Exists(statusFile)) { JavaScriptSerializer js=new JavaScriptSerializer(); RuntimeStatus st=js.Deserialize<RuntimeStatus>(File.ReadAllText(statusFile,Encoding.UTF8)); if (st!=null) { server=st.serverRunning; vp=st.vpConnected; bc=st.bcConnected; known=true; } } } catch { }
             SetStatus(vpIcon,vpText,"VP",known,vp); SetStatus(serverIcon,serverText,"Server",known,server); SetStatus(bcIcon,bcText,"BC",known,bc);
         }
+
         private static void SetStatus(PictureBox p, Label l, string name, bool known, bool value)
         {
             if (p.Image != null) p.Image.Dispose(); p.Image=UiIcons.Create(known && value ? UiIconKind.Connected : UiIconKind.Disconnected,14);
             l.Text=name+": "+(!known ? "Unknown" : (value ? "Connected" : "Disconnected")); if (name=="Server") l.Text=name+": "+(!known ? "Unknown" : (value ? "Running" : "Stopped"));
         }
-        private sealed class RuntimeStatus { public bool serverRunning { get; set; } public bool vpConnected { get; set; } public bool bcConnected { get; set; } }
+
+        private sealed class RuntimeStatus
+        {
+            public bool serverRunning { get; set; }
+            public bool vpConnected { get; set; }
+            public bool bcConnected { get; set; }
+        }
     }
 }
