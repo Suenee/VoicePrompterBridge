@@ -69,13 +69,13 @@ namespace VPBridgeTray
 
             stateItem = new ToolStripMenuItem("Stopped", UiIcons.Create(UiIconKind.Stopped, 20)); stateItem.Enabled = false;
             startItem = new ToolStripMenuItem("Start", UiIcons.Create(UiIconKind.Start, 20), delegate { StartServer(); });
-            stopItem = new ToolStripMenuItem("Stop", UiIcons.Create(UiIconKind.Stop, 20), delegate { StopServer(false); });
+            stopItem = new ToolStripMenuItem("Stop", UiIcons.Create(UiIconKind.Stop, 20), delegate { StopServer(false, "shutdown"); });
             restartItem = new ToolStripMenuItem("Restart", UiIcons.Create(UiIconKind.Restart, 20), delegate { RestartServer(); });
             settingsItem = new ToolStripMenuItem("Settings", UiIcons.Create(UiIconKind.Settings, 20), delegate { ShowSettings(); });
             viewLogItem = new ToolStripMenuItem("View log", UiIcons.Create(UiIconKind.Log, 20), delegate { ShowLog(); });
             exitItem = new ToolStripMenuItem("Exit", UiIcons.Create(UiIconKind.Exit, 20), delegate { ExitBridge(); });
 
-            menu.Items.Add(new ToolStripMenuItem("VoicePrompter Bridge v0.6.6") { Enabled = false });
+            menu.Items.Add(new ToolStripMenuItem("VoicePrompter Bridge v0.7.1") { Enabled = false });
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(stateItem);
             menu.Items.Add(new ToolStripSeparator());
@@ -87,12 +87,12 @@ namespace VPBridgeTray
 
             notifyIcon = new NotifyIcon();
             notifyIcon.Icon = appIcon;
-            notifyIcon.Text = "VoicePrompter Bridge v0.6.6";
+            notifyIcon.Text = "VoicePrompter Bridge v0.7.1";
             notifyIcon.Visible = true;
             notifyIcon.MouseClick += NotifyIconMouseClick;
 
             processTimer = new System.Windows.Forms.Timer(); processTimer.Interval = 1000; processTimer.Tick += ProcessTimerTick; processTimer.Start();
-            Log("VPBridge tray v0.6.6 started, PID " + Process.GetCurrentProcess().Id);
+            Log("VPBridge tray v0.7.1 started, PID " + Process.GetCurrentProcess().Id);
             StartServer();
         }
 
@@ -125,9 +125,17 @@ namespace VPBridgeTray
                 if (!File.Exists(serverScript)) throw new FileNotFoundException("Missing dist\\main.js. Run npm run build first.", serverScript);
                 if (!File.Exists(configFile)) throw new FileNotFoundException("Missing config\\vpbridge.json.", configFile);
 
-                ProcessStartInfo psi = new ProcessStartInfo(); psi.FileName = serverExe; psi.Arguments = "\"" + serverScript + "\""; psi.WorkingDirectory = baseDir; psi.UseShellExecute = false; psi.CreateNoWindow = true; psi.WindowStyle = ProcessWindowStyle.Hidden;
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = serverExe;
+                psi.Arguments = "\"" + serverScript + "\"";
+                psi.WorkingDirectory = baseDir;
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                psi.WindowStyle = ProcessWindowStyle.Hidden;
+                psi.RedirectStandardInput = true;
                 serverProcess = Process.Start(psi);
                 if (serverProcess == null) throw new InvalidOperationException("Server process could not be started.");
+                serverProcess.StandardInput.AutoFlush = true;
                 Thread.Sleep(300);
                 if (serverProcess.HasExited)
                 {
@@ -139,7 +147,7 @@ namespace VPBridgeTray
             catch (Exception ex) { SetState(BridgeState.Error, ex.Message); ShowError(ex.Message); }
         }
 
-        private void StopServer(bool silent)
+        private void StopServer(bool silent, string reason)
         {
             try
             {
@@ -147,7 +155,24 @@ namespace VPBridgeTray
                 {
                     if (!serverProcess.HasExited)
                     {
-                        int pid = serverProcess.Id; serverProcess.Kill(); serverProcess.WaitForExit(2000); Log("Server STOPPED, PID " + pid);
+                        int pid = serverProcess.Id;
+                        bool graceful = false;
+                        try
+                        {
+                            Log("Requesting graceful server " + reason + ", PID " + pid);
+                            serverProcess.StandardInput.WriteLine(reason);
+                            serverProcess.StandardInput.Flush();
+                            graceful = serverProcess.WaitForExit(1500);
+                        }
+                        catch (Exception ex) { Log("Graceful server " + reason + " request failed: " + ex.Message); }
+
+                        if (!graceful && !serverProcess.HasExited)
+                        {
+                            Log("Graceful server " + reason + " timed out; forcing stop, PID " + pid);
+                            serverProcess.Kill();
+                            serverProcess.WaitForExit(2000);
+                        }
+                        Log("Server STOPPED (" + reason + "), PID " + pid);
                     }
                     serverProcess.Dispose(); serverProcess = null;
                 }
@@ -160,7 +185,7 @@ namespace VPBridgeTray
         private void RestartServer()
         {
             Log("RESTART requested - RAM queues will be discarded and config reloaded");
-            StopServer(true); SetState(BridgeState.Stopped, null); StartServer();
+            StopServer(true, "restart"); SetState(BridgeState.Stopped, null); StartServer();
         }
 
         private void ShowSettings()
@@ -183,7 +208,7 @@ namespace VPBridgeTray
 
         private void ExitBridge()
         {
-            exiting = true; Log("EXIT requested"); processTimer.Stop(); StopServer(true);
+            exiting = true; Log("EXIT requested"); processTimer.Stop(); StopServer(true, "exit");
             if (settingsForm != null && !settingsForm.IsDisposed) settingsForm.Close();
             if (logForm != null && !logForm.IsDisposed) logForm.Close();
             notifyIcon.Visible = false; notifyIcon.Dispose(); appIcon.Dispose(); menu.Dispose(); menuOwner.Dispose(); ExitThread();
