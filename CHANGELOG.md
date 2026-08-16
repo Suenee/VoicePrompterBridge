@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1 (devel)
+- Added VPP `disconnecting` event for graceful VPBridge shutdown, restart, and exit.
+- VPBridge now notifies both connected mailboxes before closing their WebSocket connections.
+- Tray Stop sends reason `shutdown`; Restart sends `restart`; application Exit sends `exit`.
+- Tray-to-server shutdown now uses redirected stdin and waits briefly for graceful completion before falling back to forced process termination.
+- Aligned tray, server, and package version to 0.7.1.
+
 ## 0.7.0 (devel)
 - Implemented VPP v1 mailbox routing with explicit `from` and `recipient`.
 - Added server-local `ping` method (`recipient: server`).
