@@ -7,9 +7,10 @@ import { MessageQueue } from '../bridge/messageQueue';
 import type { BridgeMessage, MessageDirection } from '../bridge/message';
 import { Logger } from '../logging/logger';
 
-const VERSION = '0.7.0';
+const VERSION = '0.7.1';
 type Mailbox = 'vp' | 'bc';
 type Side = 'VP' | 'BC';
+export type GracefulDisconnectReason = 'shutdown' | 'restart' | 'exit';
 
 type VppEnvelope = {
   protocolVersion?: number;
@@ -33,6 +34,7 @@ export class VPBridgeServer {
   private nextMessageId = 1;
   private flushingVpToBc = false;
   private flushingBcToVp = false;
+  private stopping = false;
 
   constructor(private readonly config: VPBridgeConfig, private readonly logger: Logger) {
     this.vpToBcQueue = new MessageQueue(config.queue.maxMessages);
@@ -64,7 +66,35 @@ export class VPBridgeServer {
 
   start():Promise<void> { return new Promise((resolve,reject)=>{this.httpServer.once('error',reject);this.httpServer.listen(this.config.server.port,this.config.server.host,()=>{this.httpServer.off('error',reject);this.logger.system(`VPBridge v${VERSION} listening on ws://${this.config.server.host}:${this.config.server.port}`);this.logger.system(`Heartbeat interval: ${this.config.heartbeat.intervalMs} ms`);this.statusWriter.update({serverRunning:true,vpConnected:false,bcConnected:false,host:this.config.server.host,port:this.config.server.port});resolve();});}); }
 
-  stop():Promise<void> { return new Promise(resolve=>{this.logger.system('Stopping VPBridge; clearing both RAM queues');this.vpToBcQueue.clear();this.bcToVpQueue.clear();this.vpClient?.close();this.bcClient?.close();this.wsServer.close();this.statusWriter.update({serverRunning:false,vpConnected:false,bcConnected:false});this.httpServer.close(()=>resolve());}); }
+  async stop(reason:GracefulDisconnectReason='shutdown'):Promise<void> {
+    if(this.stopping)return;
+    this.stopping=true;
+    this.logger.system(`Stopping VPBridge (${reason}); announcing graceful disconnect and clearing both RAM queues`);
+    await this.announceDisconnecting(reason);
+    this.vpToBcQueue.clear();
+    this.bcToVpQueue.clear();
+    this.vpClient?.close(1001,`VPBridge ${reason}`);
+    this.bcClient?.close(1001,`VPBridge ${reason}`);
+    this.wsServer.close();
+    this.statusWriter.update({serverRunning:false,vpConnected:false,bcConnected:false});
+    await new Promise<void>(resolve=>this.httpServer.close(()=>resolve()));
+  }
+
+  private async announceDisconnecting(reason:GracefulDisconnectReason):Promise<void> {
+    const sends:Promise<void>[]=[];
+    if(this.vpClient?.readyState===WebSocket.OPEN) sends.push(this.sendServerEvent('vp','disconnecting',{reason}));
+    if(this.bcClient?.readyState===WebSocket.OPEN) sends.push(this.sendServerEvent('bc','disconnecting',{reason}));
+    if(sends.length===0)return;
+    await Promise.allSettled(sends);
+  }
+
+  private async sendServerEvent(mailbox:Mailbox,event:string,args:Record<string,unknown>):Promise<void> {
+    const ws=mailbox==='vp'?this.vpClient:this.bcClient;
+    if(!ws||ws.readyState!==WebSocket.OPEN)return;
+    const payload=JSON.stringify({protocolVersion:1,id:crypto.randomUUID(),type:'event',from:'server',recipient:mailbox,event,args,expectsResponse:false,source:{app:'VoicePrompterBridge',version:VERSION},timestamp:new Date().toISOString()});
+    try { await this.send(ws,payload); this.logger.system(`SERVER→${mailbox.toUpperCase()} ${event} SENT`); }
+    catch(err){ this.logger.system(`SERVER→${mailbox.toUpperCase()} ${event} SEND ERROR: ${err instanceof Error?err.message:String(err)}`); }
+  }
 
   private attachVp(ws:WebSocket):void {
     if(this.vpClient?.readyState===WebSocket.OPEN){this.logger.system('New VP connection replaced previous VP connection');this.vpClient.close(4000,'Replaced by new VP connection');}
