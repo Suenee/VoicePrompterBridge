@@ -1,19 +1,6 @@
 {
-  "name": "vpbridge",
-  "version": "0.7.1",
-  "private": true,
-  "description": "VoicePrompter Bridge - bidirectional WebSocket transport between VoicePrompter and Bitfocus Companion",
-  "main": "dist/main.js",
-  "scripts": {
-    "dev": "tsx src/main.ts",
-    "build": "tsc",
-    "start": "node dist/main.js",
-    "test:bc": "tsx src/tools/testBc.ts",
-    "test:vp": "tsx src/tools/testVp.ts"
-  },
-  "dependencies": { "ws": "^8.18.3" },
-  "devDependencies": { "@types/node": "^24.2.1", "@types/ws": "^8.18.1", "tsx": "^4.20.3", "typescript": "^5.9.2" },
-  "repository": { "type": "git", "url": "git+https://github.com/Suenee/VoicePrompterBridge.git" },
-  "bugs": { "url": "https://github.com/Suenee/VoicePrompterBridge/issues" },
-  "homepage": "https://github.com/Suenee/VoicePrompterBridge#readme"
+  "name":"socket-universe-bridge","version":"0.8.0","private":true,"description":"Socket Universe Bridge - generic WebSocket mailbox broker","main":"dist/main.js",
+  "scripts":{"dev":"tsx src/main.ts","build":"tsc","start":"node dist/main.js","test:bc":"tsx src/tools/testBc.ts","test:vp":"tsx src/tools/testVp.ts"},
+  "dependencies":{"ws":"^8.18.3"},"devDependencies":{"@types/node":"^24.2.1","@types/ws":"^8.18.1","tsx":"^4.20.3","typescript":"^5.9.2"},
+  "repository":{"type":"git","url":"git+https://github.com/Suenee/VoicePrompterBridge.git"},"bugs":{"url":"https://github.com/Suenee/VoicePrompterBridge/issues"},"homepage":"https://github.com/Suenee/VoicePrompterBridge#readme"
 }
