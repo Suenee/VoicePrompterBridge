@@ -1,0 +1,57 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
+import type { VPBridgeConfig } from '../config/config';
+
+export type QueueMode='OFF'|'MEMORY'|'PERSISTENT';
+export interface MailboxRecord { id:string; friendlyName:string; note:string; apiKey:string; queueMode:QueueMode; ttlSeconds:number; heartbeatSeconds:number; allowedRecipients:string[]; }
+export interface StoredMessage { rowId:number; messageId:string; source:string; target:string; payload:string; receivedAt:number; expiresAt:number|null; queuePolicy:'fifo'|'replace'; queueKey:string|null; expectsResponse:boolean; }
+
+export class MailboxStore {
+  private readonly db:DatabaseSync;
+  constructor(private readonly config:VPBridgeConfig){
+    const dataDir=path.resolve(process.cwd(),'data'); fs.mkdirSync(dataDir,{recursive:true});
+    this.db=new DatabaseSync(path.join(dataDir,'sub.db'));
+    this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
+      CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS mailboxes(id TEXT PRIMARY KEY COLLATE NOCASE,friendly_name TEXT NOT NULL,note TEXT NOT NULL DEFAULT '',api_key TEXT NOT NULL DEFAULT '',queue_mode TEXT NOT NULL DEFAULT 'OFF',ttl_seconds INTEGER NOT NULL DEFAULT 0,heartbeat_seconds INTEGER NOT NULL DEFAULT 30);
+      CREATE TABLE IF NOT EXISTS allowed_recipients(source_id TEXT NOT NULL COLLATE NOCASE,target_id TEXT NOT NULL COLLATE NOCASE,PRIMARY KEY(source_id,target_id),FOREIGN KEY(source_id) REFERENCES mailboxes(id) ON DELETE CASCADE,FOREIGN KEY(target_id) REFERENCES mailboxes(id) ON DELETE CASCADE,CHECK(lower(source_id)<>lower(target_id)));
+      CREATE TABLE IF NOT EXISTS persistent_queue(row_id INTEGER PRIMARY KEY AUTOINCREMENT,message_id TEXT NOT NULL,source_id TEXT NOT NULL,target_id TEXT NOT NULL,payload TEXT NOT NULL,received_at INTEGER NOT NULL,expires_at INTEGER,queue_policy TEXT NOT NULL DEFAULT 'fifo',queue_key TEXT,expects_response INTEGER NOT NULL DEFAULT 0);
+      CREATE INDEX IF NOT EXISTS ix_queue_target ON persistent_queue(target_id,row_id);
+      CREATE INDEX IF NOT EXISTS ix_queue_replace ON persistent_queue(source_id,target_id,queue_key) WHERE queue_policy='replace';`);
+    this.migrateLegacy(); this.purgeExpired();
+  }
+  close(){this.db.close();}
+  private migrateLegacy(){
+    const done=this.db.prepare(`SELECT value FROM meta WHERE key='legacy_migrated'`).get() as {value?:string}|undefined; if(done)return;
+    const ttl=Math.max(0,Math.floor(this.config.queue.offlineBufferMaxAgeMs/1000));
+    const mode:QueueMode=this.config.queue.offlineBufferSize>0?'MEMORY':'OFF';
+    const hb=Math.max(0,Math.floor(this.config.heartbeat.intervalMs/1000));
+    const ins=this.db.prepare('INSERT OR IGNORE INTO mailboxes(id,friendly_name,note,api_key,queue_mode,ttl_seconds,heartbeat_seconds) VALUES(?,?,?,?,?,?,?)');
+    // API keys intentionally start empty: legacy VP/VPM credentials continue through their legacy endpoints.
+    ins.run('vp','VoicePrompter','Migrated legacy mailbox','',mode,ttl,hb); ins.run('bc','Bitfocus Companion','Migrated legacy mailbox','',mode,ttl,hb);
+    this.db.prepare('INSERT OR IGNORE INTO allowed_recipients(source_id,target_id) VALUES(?,?)').run('vp','bc');
+    this.db.prepare('INSERT OR IGNORE INTO allowed_recipients(source_id,target_id) VALUES(?,?)').run('bc','vp');
+    this.db.prepare(`INSERT INTO meta(key,value) VALUES('legacy_migrated',?)`).run(new Date().toISOString());
+    this.backupLegacyConfig();
+  }
+  private backupLegacyConfig(){
+    const source=path.resolve(process.cwd(),'config','vpbridge.json'); if(!fs.existsSync(source))return;
+    const backupDir=path.resolve(process.cwd(),'config','migration-backup');fs.mkdirSync(backupDir,{recursive:true});
+    const stamp=new Date().toISOString().replace(/[:.]/g,'-'); const dest=path.join(backupDir,`vpbridge-${stamp}.json`); if(!fs.existsSync(dest))fs.copyFileSync(source,dest);
+    const cutoff=Date.now()-7*24*60*60*1000; for(const name of fs.readdirSync(backupDir)){const p=path.join(backupDir,name);try{if(fs.statSync(p).mtimeMs<cutoff)fs.unlinkSync(p);}catch{}}
+  }
+  list():MailboxRecord[]{
+    const rows=this.db.prepare('SELECT * FROM mailboxes ORDER BY id COLLATE NOCASE').all() as any[];
+    const allowed=this.db.prepare('SELECT target_id FROM allowed_recipients WHERE source_id=? ORDER BY target_id COLLATE NOCASE');
+    return rows.map(r=>({id:r.id,friendlyName:r.friendly_name,note:r.note,apiKey:r.api_key,queueMode:r.queue_mode,ttlSeconds:r.ttl_seconds,heartbeatSeconds:r.heartbeat_seconds,allowedRecipients:(allowed.all(r.id) as any[]).map(x=>x.target_id)}));
+  }
+  get(id:string){return this.list().find(m=>m.id.toLowerCase()===id.toLowerCase());}
+  isAllowed(source:string,target:string){return !!this.db.prepare('SELECT 1 AS ok FROM allowed_recipients WHERE source_id=? AND target_id=?').get(source,target);}
+  validateApiKey(mailbox:string,key:string){const m=this.get(mailbox);if(!m||!m.apiKey)return false;const a=Buffer.from(m.apiKey),b=Buffer.from(key);return a.length===b.length&&crypto.timingSafeEqual(a,b);}
+  purgeExpired(){this.db.prepare('DELETE FROM persistent_queue WHERE expires_at IS NOT NULL AND expires_at<=?').run(Date.now());}
+  persistentFor(target:string):StoredMessage[]{this.purgeExpired();return (this.db.prepare('SELECT * FROM persistent_queue WHERE target_id=? ORDER BY row_id').all(target) as any[]).map(r=>({rowId:r.row_id,messageId:r.message_id,source:r.source_id,target:r.target_id,payload:r.payload,receivedAt:r.received_at,expiresAt:r.expires_at,queuePolicy:r.queue_policy,queueKey:r.queue_key,expectsResponse:!!r.expects_response}));}
+  storePersistent(m:Omit<StoredMessage,'rowId'>){if(m.queuePolicy==='replace'&&m.queueKey)this.db.prepare(`DELETE FROM persistent_queue WHERE source_id=? AND target_id=? AND queue_policy='replace' AND queue_key=?`).run(m.source,m.target,m.queueKey);this.db.prepare('INSERT INTO persistent_queue(message_id,source_id,target_id,payload,received_at,expires_at,queue_policy,queue_key,expects_response) VALUES(?,?,?,?,?,?,?,?,?)').run(m.messageId,m.source,m.target,m.payload,m.receivedAt,m.expiresAt,m.queuePolicy,m.queueKey,m.expectsResponse?1:0);}
+  deletePersistent(rowId:number){this.db.prepare('DELETE FROM persistent_queue WHERE row_id=?').run(rowId);}
+}
