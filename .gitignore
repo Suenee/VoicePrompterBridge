@@ -2,6 +2,7 @@ node_modules/
 dist/
 runtime/
 logs/
+.upgrade-build/
 config/vpbridge.json
 VPBridge.exe
 *.log
