@@ -1,12 +1,12 @@
 $ErrorActionPreference = 'Stop'
 
 $AppVersion = '0.8.0'
-$RunnerRevision = '0.8.0-ps1.1'
+$RunnerRevision = '0.8.0-ps1.2'
 $Repo = $env:SUB_UPGRADE_REPO
 $Branch = if ($env:SUB_UPGRADE_BRANCH) { $env:SUB_UPGRADE_BRANCH } else { 'devel' }
 $Remote = if ($env:SUB_UPGRADE_REMOTE) { $env:SUB_UPGRADE_REMOTE } else { 'https://github.com/Suenee/VoicePrompterBridge.git' }
 if ([string]::IsNullOrWhiteSpace($Repo)) { throw 'SUB_UPGRADE_REPO is not set.' }
-$Repo = [System.IO.Path]::GetFullPath($Repo).TrimEnd('\','/')
+$Repo = [System.IO.Path]::GetFullPath($Repo).TrimEnd([char[]]@('\','/'))
 Set-Location $Repo
 
 $LogsDir = Join-Path $Repo 'logs'
@@ -29,16 +29,38 @@ function Write-StatusLine {
     Write-Host $Text -ForegroundColor $color
 }
 
+function ConvertTo-NativeArgument {
+    param([AllowEmptyString()][string]$Value)
+    if ($Value -notmatch '[\s"]') { return $Value }
+    $sb = New-Object System.Text.StringBuilder
+    [void]$sb.Append('"')
+    $slashes = 0
+    foreach ($ch in $Value.ToCharArray()) {
+        if ($ch -eq '\') { $slashes++; continue }
+        if ($ch -eq '"') {
+            if ($slashes -gt 0) { [void]$sb.Append(('\' * ($slashes * 2))) }
+            [void]$sb.Append('\"')
+            $slashes = 0
+            continue
+        }
+        if ($slashes -gt 0) { [void]$sb.Append(('\' * $slashes)); $slashes = 0 }
+        [void]$sb.Append($ch)
+    }
+    if ($slashes -gt 0) { [void]$sb.Append(('\' * ($slashes * 2))) }
+    [void]$sb.Append('"')
+    return $sb.ToString()
+}
+
 function Invoke-Native {
     param([string]$Exe,[string[]]$Args,[switch]$AllowFailure)
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $Exe
+    $psi.Arguments = (($Args | ForEach-Object { ConvertTo-NativeArgument $_ }) -join ' ')
     $psi.WorkingDirectory = $Repo
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
-    foreach ($a in $Args) { [void]$psi.ArgumentList.Add($a) }
     $p = New-Object System.Diagnostics.Process
     $p.StartInfo = $psi
     [void]$p.Start()
