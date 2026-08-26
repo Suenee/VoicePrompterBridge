@@ -1,46 +1,55 @@
 @echo off
 cls
-setlocal EnableExtensions
-cd /d "%~dp0"
-set "SUB_UPGRADE_REPO=%CD%"
+setlocal EnableExtensions EnableDelayedExpansion
+
+set "UPGRADE_REV=0.8.0-bootstrap.3"
+set "REPO_DIR=%~dp0"
+if "!REPO_DIR:~-1!"=="\" set "REPO_DIR=!REPO_DIR:~0,-1!"
+cd /d "!REPO_DIR!"
+set "SUB_UPGRADE_REPO=!REPO_DIR!"
 set "SUB_UPGRADE_BRANCH=devel"
 set "SUB_UPGRADE_REMOTE=https://github.com/Suenee/VoicePrompterBridge.git"
-set "SUB_UPGRADE_TEMP=%TEMP%\sub-upgrade-%RANDOM%-%RANDOM%.ps1"
+if not exist "!REPO_DIR!\logs" mkdir "!REPO_DIR!\logs" >nul 2>nul
 
-where git >NUL 2>&1
+where git.exe >nul 2>nul
 if errorlevel 1 (
-  echo ERROR: Git for Windows is required.
-  exit /b 1
+    > "!REPO_DIR!\logs\upgrade.log" echo ERROR: Git was not found in PATH.
+    >> "!REPO_DIR!\logs\upgrade.log" echo STATUS: FAILED - phase=SELF-UPDATE/BOOTSTRAP
+    echo ERROR: Git for Windows is required.
+    exit /b 1
 )
 
-if not exist ".git" (
-  echo ERROR: This launcher must be run from the VoicePrompterBridge repository.
-  exit /b 1
-)
-
-git diff --quiet
+git rev-parse --is-inside-work-tree >nul 2>nul
 if errorlevel 1 (
-  echo ERROR: Local tracked changes exist. Upgrade aborted.
-  exit /b 1
+    > "!REPO_DIR!\logs\upgrade.log" echo ERROR: This folder is not a Git working tree.
+    >> "!REPO_DIR!\logs\upgrade.log" echo STATUS: FAILED - phase=SELF-UPDATE/BOOTSTRAP
+    echo ERROR: This launcher must be run from the VoicePrompterBridge repository.
+    exit /b 1
 )
-git diff --cached --quiet
+
+git remote set-url origin "!SUB_UPGRADE_REMOTE!" >nul 2>nul
+git fetch origin "!SUB_UPGRADE_BRANCH!"
 if errorlevel 1 (
-  echo ERROR: Local staged changes exist. Upgrade aborted.
-  exit /b 1
+    > "!REPO_DIR!\logs\upgrade.log" echo ERROR: git fetch origin failed before PowerShell runner bootstrap.
+    >> "!REPO_DIR!\logs\upgrade.log" echo STATUS: FAILED - phase=SELF-UPDATE/BOOTSTRAP
+    exit /b 1
 )
 
-git remote set-url origin "%SUB_UPGRADE_REMOTE%" >NUL 2>&1
-git fetch origin "%SUB_UPGRADE_BRANCH%"
-if errorlevel 1 exit /b %ERRORLEVEL%
-
-git show "origin/%SUB_UPGRADE_BRANCH%:upgrade.ps1" > "%SUB_UPGRADE_TEMP%"
+set "RUNNER_TEMP=%TEMP%\sub-upgrade-%RANDOM%-%RANDOM%.ps1"
+git show "origin/!SUB_UPGRADE_BRANCH!:upgrade.ps1" > "!RUNNER_TEMP!" 2>nul
 if errorlevel 1 (
-  echo ERROR: Could not obtain current upgrade.ps1 from origin/%SUB_UPGRADE_BRANCH%.
-  del /q "%SUB_UPGRADE_TEMP%" >NUL 2>&1
-  exit /b 1
+    > "!REPO_DIR!\logs\upgrade.log" echo ERROR: Could not extract origin/devel:upgrade.ps1.
+    >> "!REPO_DIR!\logs\upgrade.log" echo STATUS: FAILED - phase=SELF-UPDATE/BOOTSTRAP
+    echo ERROR: Could not obtain current upgrade.ps1 from origin/!SUB_UPGRADE_BRANCH!.
+    del /q "!RUNNER_TEMP!" >nul 2>nul
+    exit /b 1
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%SUB_UPGRADE_TEMP%"
-set "RC=%ERRORLEVEL%"
-del /q "%SUB_UPGRADE_TEMP%" >NUL 2>&1
-exit /b %RC%
+rem IMPORTANT: this final block is parsed before PowerShell starts.
+rem The runner may update upgrade.cmd on disk without changing commands already parsed here.
+(
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "!RUNNER_TEMP!"
+    set "UPGRADE_RC=!ERRORLEVEL!"
+    del /q "!RUNNER_TEMP!" >nul 2>nul
+    exit /b !UPGRADE_RC!
+)
