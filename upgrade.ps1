@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $AppVersion = '0.8.0'
-$RunnerRevision = '0.8.0-ps1.4'
+$RunnerRevision = '0.8.0-ps1.5'
 $Repo = $env:SUB_UPGRADE_REPO
 $Branch = if ($env:SUB_UPGRADE_BRANCH) { $env:SUB_UPGRADE_BRANCH } else { 'devel' }
 $Remote = if ($env:SUB_UPGRADE_REMOTE) { $env:SUB_UPGRADE_REMOTE } else { 'https://github.com/Suenee/VoicePrompterBridge.git' }
@@ -90,11 +90,32 @@ function Restore-RunningState {
 function Remove-JsonProperty($Object,[string]$Name) {
     if($null -ne $Object -and $null -ne $Object.PSObject.Properties[$Name]) { $Object.PSObject.Properties.Remove($Name) }
 }
+function Test-LegacyMigration([string]$DatabasePath,[string]$NodeExe) {
+    if(-not(Test-Path $DatabasePath)){ return $false }
+    $scriptPath=Join-Path $env:TEMP ("sub-migration-check-{0}.cjs" -f [guid]::NewGuid())
+    $script=@'
+const { DatabaseSync } = require('node:sqlite');
+const db = new DatabaseSync(process.argv[2], { readOnly: true });
+try {
+  const row = db.prepare("SELECT value FROM meta WHERE key='legacy_migrated'").get();
+  process.exitCode = row ? 0 : 2;
+} finally {
+  db.close();
+}
+'@
+    try {
+        [IO.File]::WriteAllText($scriptPath,$script,$Utf8)
+        & $NodeExe $scriptPath $DatabasePath *> $null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    } finally {
+        Remove-Item $scriptPath -Force -ErrorAction SilentlyContinue
+    }
+}
 function Clean-MigratedConfig([string]$ConfigPath,[string]$DatabasePath,[string]$NodeExe) {
     if(-not(Test-Path $ConfigPath) -or -not(Test-Path $DatabasePath)){ return }
-    $check="const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync(process.argv[1],{readOnly:true});const row=db.prepare(\"SELECT value FROM meta WHERE key='legacy_migrated'\").get();db.close();process.exit(row?0:2);"
-    & $NodeExe -e $check $DatabasePath *> $null
-    if($LASTEXITCODE -ne 0){ Info 'SQLite mailbox migration is not confirmed; legacy JSON settings were kept.'; return }
+    if(-not(Test-LegacyMigration $DatabasePath $NodeExe)){ Info 'SQLite mailbox migration is not confirmed; legacy JSON settings were kept.'; return }
     try {
         $cfg=Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
         Remove-JsonProperty $cfg 'heartbeat'
