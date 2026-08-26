@@ -3,5 +3,5 @@
   "security": {"apiKey":""},
   "heartbeat": {"intervalMs":30000},
   "queue": {"maxMessages":1000,"offlineBufferSize":0,"offlineBufferMaxAgeMs":1000},
-  "logging": {"enabled":true,"directory":"./logs","retentionMinutes":60}
+  "logging": {"enabled":true,"directory":"./logs","retentionMinutes":60,"debugMode":"OFF"}
 }
