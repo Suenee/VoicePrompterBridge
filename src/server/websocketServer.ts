@@ -17,7 +17,7 @@ export class VPBridgeServer {
  private nextMessageId=1; private stopping=false;
  constructor(private readonly config:VPBridgeConfig,private readonly logger:Logger){
   this.logger.debug('Initializing Socket Universe Bridge server');
-  this.store=new MailboxStore(config); this.statusWriter=new StatusWriter({serverRunning:false,vpConnected:false,bcConnected:false,host:config.server.host,port:config.server.port});
+  this.store=new MailboxStore(config,logger); this.statusWriter=new StatusWriter({serverRunning:false,vpConnected:false,bcConnected:false,host:config.server.host,port:config.server.port});
   this.httpServer.on('upgrade',(request,socket,head)=>{try{const url=new URL(request.url??'/',`http://${request.headers.host??'localhost'}`);const mailbox=this.resolveMailbox(url.pathname);if(!mailbox){this.logger.debug(`Rejected unknown mailbox path ${url.pathname}`);socket.write('HTTP/1.1 404 Not Found\r\n\r\n');socket.destroy();return;}
    if(config.server.mode==='all'){const supplied=url.searchParams.get('apiKey')??'';const legacy=(mailbox==='vp'&&url.pathname===config.server.vpPath)||(mailbox==='bc'&&url.pathname===config.server.bcPath);if(!(legacy&&this.isLegacyKeyValid(supplied))&&!this.store.validateApiKey(mailbox,supplied)){this.logger.system(`AUTH REJECTED for ${mailbox} from ${request.socket.remoteAddress??'unknown'}`);this.logger.debug(`Authentication rejected for mailbox ${mailbox}`);socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');socket.destroy();return;}}
    this.wsServer.handleUpgrade(request,socket,head,ws=>this.wsServer.emit('connection',ws,request,mailbox));}catch(e){this.logger.debug('WebSocket upgrade failed',e);socket.destroy();}});
