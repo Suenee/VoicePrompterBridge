@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $AppVersion = '0.8.0'
-$RunnerRevision = '0.8.0-ps1.3'
+$RunnerRevision = '0.8.0-ps1.4'
 $Repo = $env:SUB_UPGRADE_REPO
 $Branch = if ($env:SUB_UPGRADE_BRANCH) { $env:SUB_UPGRADE_BRANCH } else { 'devel' }
 $Remote = if ($env:SUB_UPGRADE_REMOTE) { $env:SUB_UPGRADE_REMOTE } else { 'https://github.com/Suenee/VoicePrompterBridge.git' }
@@ -87,6 +87,28 @@ function Restore-RunningState {
     Start-Process -FilePath $exe -WorkingDirectory $Repo | Out-Null
     Write-Line 'Socket Universe Bridge restarted.' Green
 }
+function Remove-JsonProperty($Object,[string]$Name) {
+    if($null -ne $Object -and $null -ne $Object.PSObject.Properties[$Name]) { $Object.PSObject.Properties.Remove($Name) }
+}
+function Clean-MigratedConfig([string]$ConfigPath,[string]$DatabasePath,[string]$NodeExe) {
+    if(-not(Test-Path $ConfigPath) -or -not(Test-Path $DatabasePath)){ return }
+    $check="const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync(process.argv[1],{readOnly:true});const row=db.prepare(\"SELECT value FROM meta WHERE key='legacy_migrated'\").get();db.close();process.exit(row?0:2);"
+    & $NodeExe -e $check $DatabasePath *> $null
+    if($LASTEXITCODE -ne 0){ Info 'SQLite mailbox migration is not confirmed; legacy JSON settings were kept.'; return }
+    try {
+        $cfg=Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        Remove-JsonProperty $cfg 'heartbeat'
+        Remove-JsonProperty $cfg 'queue'
+        if($cfg.server){ Remove-JsonProperty $cfg.server 'host' }
+        if($cfg.logging){
+            Remove-JsonProperty $cfg.logging 'enabled'
+            Remove-JsonProperty $cfg.logging 'directory'
+            if($null -ne $cfg.logging.debugMode){ $cfg.logging.debugMode=([string]$cfg.logging.debugMode).Trim().ToLowerInvariant() }
+        }
+        [IO.File]::WriteAllText($ConfigPath,($cfg | ConvertTo-Json -Depth 20),$Utf8)
+        Write-Line 'Removed migrated mailbox settings and derived defaults from config/vpbridge.json.' Green
+    } catch { Fail 'MIGRATION' ("Could not clean migrated config: "+$_.Exception.Message) }
+}
 
 try {
     $git=Require-Command 'git.exe'
@@ -134,7 +156,7 @@ try {
         Run-Native -PhaseName $Phase -Exe $winget -ArgumentList @('install','--id','Microsoft.DotNet.SDK.10','--exact','--accept-package-agreements','--accept-source-agreements','--silent') | Out-Null
         $env:PATH="$env:ProgramFiles\dotnet;$env:PATH"
     }
-    $dotnet=Require-Command 'dotnet.exe'; $npm=Require-Command 'npm.cmd'
+    $dotnet=Require-Command 'dotnet.exe'; $npm=Require-Command 'npm.cmd'; $node=Require-Command 'node.exe'
     Run-Native -PhaseName $Phase -Exe $npm -ArgumentList @('install') | Out-Null
 
     Set-Phase 'BUILD'
@@ -161,6 +183,7 @@ try {
     $migrationDir=Join-Path $Repo 'config\migration-backup'; New-Item -ItemType Directory -Force -Path $migrationDir | Out-Null
     if(Test-Path $config){Copy-Item $config (Join-Path $migrationDir ("vpbridge-pre-sub-{0}.json" -f (Get-Date -Format 'yyyyMMdd-HHmmss')))}
     Get-ChildItem $migrationDir -Filter '*.json' -ErrorAction SilentlyContinue | Where-Object {$_.LastWriteTime -lt (Get-Date).AddDays(-7)} | Remove-Item -Force -ErrorAction SilentlyContinue
+    Clean-MigratedConfig $config (Join-Path $Repo 'data\sub.db') $node
 
     Set-Phase 'DEPLOY'
     $liveExe=Join-Path $Repo 'SocketUniverseBridge.exe'; if(Test-Path $liveExe){Copy-Item $liveExe $BackupExe -Force}
