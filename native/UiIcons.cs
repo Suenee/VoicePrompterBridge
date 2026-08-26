@@ -7,7 +7,7 @@ namespace VPBridgeTray
 {
     internal enum UiIconKind
     {
-        Start, Stop, Restart, Exit, Settings, Log, Copy, Regenerate, Running, Stopped, Error, Connected, Disconnected
+        Start, Stop, Restart, Exit, Settings, Mailboxes, Log, Copy, Regenerate, Running, Stopped, Error, Connected, Disconnected
     }
 
     internal static class UiIcons
@@ -111,6 +111,16 @@ namespace VPBridgeTray
                             float x2=10*s+(float)Math.Cos(a)*8*s, y2=10*s+(float)Math.Sin(a)*8*s;
                             g.DrawLine(p,x1,y1,x2,y2);
                         }
+                    }
+                }
+                else if (kind == UiIconKind.Mailboxes)
+                {
+                    using (Pen p = new Pen(Color.FromArgb(70,105,150), Math.Max(1.2f,1.6f*s)))
+                    {
+                        g.DrawRectangle(p, 3*s, 4*s, 14*s, 5*s);
+                        g.DrawRectangle(p, 3*s, 11*s, 14*s, 5*s);
+                        g.DrawLine(p, 12*s, 6.5f*s, 15*s, 6.5f*s);
+                        g.DrawLine(p, 12*s, 13.5f*s, 15*s, 13.5f*s);
                     }
                 }
                 else if (kind == UiIconKind.Log)
