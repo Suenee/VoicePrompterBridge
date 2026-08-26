@@ -74,6 +74,13 @@ if exist "VPBridge.exe" del /Q "VPBridge.exe"
 if exist "publish" rmdir /S /Q "publish"
 forfiles /P "config\migration-backup" /M "*.json" /D -7 /C "cmd /c del /q @path" >NUL 2>&1
 
+echo Migrating legacy VPB autostart...
+reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "VoicePrompterBridge" >NUL 2>&1
+if not errorlevel 1 (
+  reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "SocketUniverseBridge" /t REG_SZ /d "\"%CD%\SocketUniverseBridge.exe\"" /f >NUL || goto :fail_after_stop
+  reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "VoicePrompterBridge" /f >NUL 2>&1
+)
+
 echo Removing obsolete .NET 8 installations...
 where winget >NUL 2>&1 && (
   winget uninstall --id Microsoft.DotNet.SDK.8 --exact --silent >NUL 2>&1
@@ -88,12 +95,10 @@ if "%WAS_RUNNING%"=="1" (start "" "%CD%\SocketUniverseBridge.exe") else echo Bri
 echo.
 echo SUB DEVEL UPGRADE COMPLETED SUCCESSFULLY
 exit /b 0
-
 :fail_after_stop
 echo ERROR: Deployment failed after the bridge was stopped.
 if "%WAS_RUNNING%"=="1" if exist "%CD%\VPBridge.exe" start "" "%CD%\VPBridge.exe"
 goto :fail
-
 :fail
 if exist "%AUDIT_FILE%" del /Q "%AUDIT_FILE%" >NUL 2>&1
 echo.
