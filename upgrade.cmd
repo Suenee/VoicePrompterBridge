@@ -1,4 +1,5 @@
 @echo off
+cls
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 set "REPO_URL=https://github.com/Suenee/VoicePrompterBridge.git"
@@ -73,6 +74,12 @@ if exist "runtime\VPBridge.Server.exe" del /Q "runtime\VPBridge.Server.exe"
 if exist "VPBridge.exe" del /Q "VPBridge.exe"
 if exist "publish" rmdir /S /Q "publish"
 forfiles /P "config\migration-backup" /M "*.json" /D -7 /C "cmd /c del /q @path" >NUL 2>&1
+
+rem Legacy VPB log files are intentionally discarded; SUB starts with one clean traffic log.
+if exist "logs\vpbridge.log" del /Q "logs\vpbridge.log"
+if exist "logs\vpbridge-tray.log" del /Q "logs\vpbridge-tray.log"
+if not exist "logs" mkdir "logs"
+if not exist "logs\SocketUniverseBridge.log" type nul > "logs\SocketUniverseBridge.log"
 
 echo Migrating legacy VPB autostart...
 reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "VoicePrompterBridge" >NUL 2>&1
