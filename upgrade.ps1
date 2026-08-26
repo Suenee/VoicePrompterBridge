@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $AppVersion = '0.8.0'
-$RunnerRevision = '0.8.0-ps1.5'
+$RunnerRevision = '0.8.0-ps1.6'
 $Repo = $env:SUB_UPGRADE_REPO
 $Branch = if ($env:SUB_UPGRADE_BRANCH) { $env:SUB_UPGRADE_BRANCH } else { 'devel' }
 $Remote = if ($env:SUB_UPGRADE_REMOTE) { $env:SUB_UPGRADE_REMOTE } else { 'https://github.com/Suenee/VoicePrompterBridge.git' }
@@ -196,6 +196,13 @@ try {
     $newExe=Join-Path $publishBuild 'SocketUniverseBridge.exe'
     if(-not(Test-Path $newExe)){Fail $Phase 'Required publish artifact is missing: SocketUniverseBridge.exe'}
     if(-not(Test-Path (Join-Path $serverBuild 'main.js'))){Fail $Phase 'Required TypeScript artifact is missing: main.js'}
+    $projectText=Get-Content -LiteralPath (Join-Path $Repo 'native\SocketUniverseBridge.csproj') -Raw -Encoding UTF8
+    if($projectText -notmatch '<IncludeNativeLibrariesForSelfExtract>\s*true\s*</IncludeNativeLibrariesForSelfExtract>'){Fail $Phase 'Single-file publish is not configured to bundle native SQLite libraries.'}
+    $assetsPath=Join-Path $Repo 'native\obj\project.assets.json'
+    if(-not(Test-Path $assetsPath)){Fail $Phase 'NuGet asset graph is missing after restore.'}
+    $assetsText=Get-Content -LiteralPath $assetsPath -Raw -Encoding UTF8
+    if($assetsText -notmatch 'SQLitePCLRaw\.bundle_e_sqlite3' -or $assetsText -notmatch 'runtimes/win-x64/native/e_sqlite3\.dll'){Fail $Phase 'SQLite native win-x64 runtime is missing from the restored dependency graph.'}
+    Write-Line 'SQLite native runtime and single-file bundling verified.' Green
     Write-Line 'All build artifacts verified before deployment.' Green
 
     Set-Phase 'STOP-RUNTIME'; Stop-BridgeRuntime
