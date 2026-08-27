@@ -34,7 +34,7 @@ internal sealed class SUBContext:ApplicationContext
   menu.Closed+=(_,_)=>{if(menuOwner.Visible)menuOwner.Hide();};
 
   var titleItem=new ToolStripMenuItem($"Socket Universe Bridge v{Version}",icon.ToBitmap()){Enabled=false};
-  stateItem=new ToolStripMenuItem("Stopped",UiIcons.Create(UiIconKind.Stopped,20)){Enabled=false};
+  stateItem=new ToolStripMenuItem("Stopped",UiIcons.Create(UiIconKind.Stopped,20)){Enabled=true};
   startItem=new ToolStripMenuItem("Start",UiIcons.Create(UiIconKind.Start,20),(_,_)=>{Start();ReopenMenuSoon();});
   stopItem=new ToolStripMenuItem("Stop",UiIcons.Create(UiIconKind.Stop,20),(_,_)=>{Stop("shutdown",false);ReopenMenuSoon();});
   restartItem=new ToolStripMenuItem("Restart",UiIcons.Create(UiIconKind.Restart,20),(_,_)=>{Restart();ReopenMenuSoon();});
