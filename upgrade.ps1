@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $AppVersion = '0.8.0'
-$RunnerRevision = '0.8.0-ps1.6'
+$RunnerRevision = '0.8.0-ps1.7'
 $Repo = $env:SUB_UPGRADE_REPO
 $Branch = if ($env:SUB_UPGRADE_BRANCH) { $env:SUB_UPGRADE_BRANCH } else { 'devel' }
 $Remote = if ($env:SUB_UPGRADE_REMOTE) { $env:SUB_UPGRADE_REMOTE } else { 'https://github.com/Suenee/VoicePrompterBridge.git' }
@@ -87,6 +87,16 @@ function Restore-RunningState {
     Start-Process -FilePath $exe -WorkingDirectory $Repo | Out-Null
     Write-Line 'Socket Universe Bridge restarted.' Green
 }
+function Stop-IdleDotNetBuildServers([string]$DotNetExe) {
+    try {
+        $active=@(Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" -ErrorAction Stop | Where-Object {
+            $_.CommandLine -and $_.CommandLine -match '(?i)(^|\s)(build|publish|restore|test|msbuild)(\s|$)'
+        })
+        if($active.Count -gt 0){ Info '.NET build host cleanup skipped: another build is active.'; return }
+        $rc=Run-Native -PhaseName 'DEPENDENCY-CLEANUP' -Exe $DotNetExe -ArgumentList @('build-server','shutdown') -AllowFailure
+        if($rc -eq 0){ Write-Line '.NET build hosts stopped.' Green } else { Warn '.NET build host cleanup did not complete successfully.' }
+    } catch { Warn ('.NET build host cleanup skipped: '+$_.Exception.Message) }
+}
 function Remove-JsonProperty($Object,[string]$Name) {
     if($null -ne $Object -and $null -ne $Object.PSObject.Properties[$Name]) { $Object.PSObject.Properties.Remove($Name) }
 }
@@ -115,7 +125,7 @@ try {
 }
 function Clean-MigratedConfig([string]$ConfigPath,[string]$DatabasePath,[string]$NodeExe) {
     if(-not(Test-Path $ConfigPath) -or -not(Test-Path $DatabasePath)){ return }
-    if(-not(Test-LegacyMigration $DatabasePath $NodeExe)){ Info 'SQLite mailbox migration is not confirmed; legacy JSON settings were kept.'; return }
+    if(-not(Test-LegacyMigration $DatabasePath $NodeExe)){ Info 'SQLite Socket Box migration is not confirmed; legacy JSON settings were kept.'; return }
     try {
         $cfg=Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
         Remove-JsonProperty $cfg 'heartbeat'
@@ -127,7 +137,7 @@ function Clean-MigratedConfig([string]$ConfigPath,[string]$DatabasePath,[string]
             if($null -ne $cfg.logging.debugMode){ $cfg.logging.debugMode=([string]$cfg.logging.debugMode).Trim().ToLowerInvariant() }
         }
         [IO.File]::WriteAllText($ConfigPath,($cfg | ConvertTo-Json -Depth 20),$Utf8)
-        Write-Line 'Removed migrated mailbox settings and derived defaults from config/vpbridge.json.' Green
+        Write-Line 'Removed migrated Socket Box settings and derived defaults from config/vpbridge.json.' Green
     } catch { Fail 'MIGRATION' ("Could not clean migrated config: "+$_.Exception.Message) }
 }
 
@@ -233,6 +243,7 @@ try {
     Set-Phase 'DEPENDENCY-CLEANUP'
     $wingetCmd=Get-Command winget.exe -ErrorAction SilentlyContinue
     if($wingetCmd){foreach($id in @('Microsoft.DotNet.SDK.8','Microsoft.DotNet.DesktopRuntime.8','Microsoft.DotNet.Runtime.8','Microsoft.DotNet.AspNetCore.8')){Run-Native -PhaseName $Phase -Exe $wingetCmd.Source -ArgumentList @('uninstall','--id',$id,'--exact','--silent') -AllowFailure -SuppressOutput | Out-Null}}
+    Stop-IdleDotNetBuildServers $dotnet
 
     Set-Phase 'RESTART'; Restore-RunningState
     Set-Phase 'COMPLETE'
