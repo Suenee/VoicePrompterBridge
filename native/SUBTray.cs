@@ -25,7 +25,7 @@ internal sealed class SUBContext:ApplicationContext
  readonly System.Windows.Forms.Timer processTimer=new(){Interval=1000};
  readonly EventWaitHandle activationEvent;
  readonly Thread activationThread;
- Process? server;MailboxesForm? mailboxes;SUBLogForm? log;SUBSettingsForm? settings;bool exiting;Point lastMenuPoint;
+ Process? server;MailboxesForm? mailboxes;SUBLogForm? log;SUBSettingsForm? settings;bool exiting,suppressStatusClose;Point lastMenuPoint;
  string RuntimeDir=>Path.Combine(baseDir,"runtime");string ServerExe=>Path.Combine(RuntimeDir,"SUB.Server.exe");string Script=>Path.Combine(baseDir,"dist","main.js");string Db=>Path.Combine(baseDir,"data","sub.db");string Log=>Path.Combine(baseDir,"logs","SocketUniverseBridge.log");string Status=>Path.Combine(RuntimeDir,"status.json");string Config=>Path.Combine(baseDir,"config","vpbridge.json");
 
  public SUBContext(EventWaitHandle showLogEvent)
@@ -38,10 +38,12 @@ internal sealed class SUBContext:ApplicationContext
   menuOwner=new Form{FormBorderStyle=FormBorderStyle.None,ShowInTaskbar=false,StartPosition=FormStartPosition.Manual,Size=new Size(1,1),Opacity=0.01,TopMost=true};
   _=menuOwner.Handle;
   menuOwner.Deactivate+=(_,_)=>{if(menu.Visible&&!menu.Bounds.Contains(Cursor.Position))menu.Close(ToolStripDropDownCloseReason.AppClicked);};
-  menu.Closed+=(_,_)=>{if(menuOwner.Visible)menuOwner.Hide();};
+  menu.Closing+=(_,e)=>{if(suppressStatusClose&&e.CloseReason==ToolStripDropDownCloseReason.ItemClicked){e.Cancel=true;suppressStatusClose=false;}};
+  menu.Closed+=(_,_)=>{suppressStatusClose=false;if(menuOwner.Visible)menuOwner.Hide();};
 
   var titleItem=new ToolStripMenuItem($"Socket Universe Bridge v{Version}",icon.ToBitmap()){Enabled=false};
   stateItem=new StatusMenuItem("Stopped",UiIcons.Create(UiIconKind.Stopped,20));
+  stateItem.MouseDown+=(_,_)=>suppressStatusClose=true;
   startItem=new ToolStripMenuItem("Start",UiIcons.Create(UiIconKind.Start,20),(_,_)=>{Start();ReopenMenuSoon();});
   stopItem=new ToolStripMenuItem("Stop",UiIcons.Create(UiIconKind.Stop,20),(_,_)=>{Stop("shutdown",false);ReopenMenuSoon();});
   restartItem=new ToolStripMenuItem("Restart",UiIcons.Create(UiIconKind.Restart,20),(_,_)=>{Restart();ReopenMenuSoon();});
