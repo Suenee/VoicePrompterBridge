@@ -6,6 +6,13 @@ namespace VPBridgeTray;
 
 internal enum BridgeState { Running, Stopped, Error, Restarting }
 
+internal sealed class StatusMenuItem:ToolStripMenuItem
+{
+ public StatusMenuItem(string text,Image image):base(text,image){}
+ protected override bool DismissWhenClicked=>false;
+ protected override void OnClick(EventArgs e){}
+}
+
 internal sealed class SUBContext:ApplicationContext
 {
  const string Version="0.8.0";
@@ -14,8 +21,7 @@ internal sealed class SUBContext:ApplicationContext
  readonly Icon icon;
  readonly ContextMenuStrip menu;
  readonly Form menuOwner;
- readonly ToolStripLabel stateItem;
- readonly ToolStripMenuItem startItem,stopItem,restartItem,settingsItem,mailboxesItem,viewLogItem,exitItem;
+ readonly ToolStripMenuItem stateItem,startItem,stopItem,restartItem,settingsItem,mailboxesItem,viewLogItem,exitItem;
  readonly System.Windows.Forms.Timer processTimer=new(){Interval=1000};
  readonly EventWaitHandle activationEvent;
  readonly Thread activationThread;
@@ -35,7 +41,7 @@ internal sealed class SUBContext:ApplicationContext
   menu.Closed+=(_,_)=>{if(menuOwner.Visible)menuOwner.Hide();};
 
   var titleItem=new ToolStripMenuItem($"Socket Universe Bridge v{Version}",icon.ToBitmap()){Enabled=false};
-  stateItem=new ToolStripLabel("Stopped",UiIcons.Create(UiIconKind.Stopped,20));
+  stateItem=new StatusMenuItem("Stopped",UiIcons.Create(UiIconKind.Stopped,20));
   startItem=new ToolStripMenuItem("Start",UiIcons.Create(UiIconKind.Start,20),(_,_)=>{Start();ReopenMenuSoon();});
   stopItem=new ToolStripMenuItem("Stop",UiIcons.Create(UiIconKind.Stop,20),(_,_)=>{Stop("shutdown",false);ReopenMenuSoon();});
   restartItem=new ToolStripMenuItem("Restart",UiIcons.Create(UiIconKind.Restart,20),(_,_)=>{Restart();ReopenMenuSoon();});
