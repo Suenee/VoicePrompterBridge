@@ -39,7 +39,7 @@ internal sealed class SUBContext:ApplicationContext
   stopItem=new ToolStripMenuItem("Stop",UiIcons.Create(UiIconKind.Stop,20),(_,_)=>{Stop("shutdown",false);ReopenMenuSoon();});
   restartItem=new ToolStripMenuItem("Restart",UiIcons.Create(UiIconKind.Restart,20),(_,_)=>{Restart();ReopenMenuSoon();});
   settingsItem=new ToolStripMenuItem("Settings...",UiIcons.Create(UiIconKind.Settings,20),(_,_)=>ShowSettings());
-  mailboxesItem=new ToolStripMenuItem("Mailboxes...",UiIcons.Create(UiIconKind.Mailboxes,20),(_,_)=>ShowMailboxes());
+  mailboxesItem=new ToolStripMenuItem("Socket Boxes...",UiIcons.Create(UiIconKind.Mailboxes,20),(_,_)=>ShowMailboxes());
   viewLogItem=new ToolStripMenuItem("View log...",UiIcons.Create(UiIconKind.Log,20),(_,_)=>ShowLog());
   exitItem=new ToolStripMenuItem("Exit",UiIcons.Create(UiIconKind.Exit,20),(_,_)=>Exit());
   menu.Items.Add(titleItem);menu.Items.Add(new ToolStripSeparator());menu.Items.Add(stateItem);menu.Items.Add(new ToolStripSeparator());menu.Items.Add(startItem);menu.Items.Add(stopItem);menu.Items.Add(restartItem);menu.Items.Add(new ToolStripSeparator());menu.Items.Add(settingsItem);menu.Items.Add(mailboxesItem);menu.Items.Add(viewLogItem);menu.Items.Add(new ToolStripSeparator());menu.Items.Add(exitItem);
