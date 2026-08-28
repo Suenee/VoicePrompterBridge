@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace VPBridgeTray;
@@ -15,6 +17,7 @@ internal sealed class StatusMenuItem:ToolStripMenuItem
 
 internal sealed class SUBContext:ApplicationContext
 {
+ [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr handle);
  const string Version="0.8.0";
  readonly string baseDir=AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
  readonly NotifyIcon tray;
@@ -32,7 +35,7 @@ internal sealed class SUBContext:ApplicationContext
  {
   activationEvent=showLogEvent;
   Directory.CreateDirectory(RuntimeDir);Directory.CreateDirectory(Path.Combine(baseDir,"logs"));
-  try{icon=UiIcons.CreateAppIcon(32);}catch{icon=(Icon)SystemIcons.Application.Clone();}
+  try{icon=CreateEdgeToEdgeAppIcon();}catch{icon=(Icon)SystemIcons.Application.Clone();}
 
   menu=new ContextMenuStrip{AutoClose=true};
   menuOwner=new Form{FormBorderStyle=FormBorderStyle.None,ShowInTaskbar=false,StartPosition=FormStartPosition.Manual,Size=new Size(1,1),Opacity=0.01,TopMost=true};
@@ -61,6 +64,7 @@ internal sealed class SUBContext:ApplicationContext
   SetState(BridgeState.Stopped);Start();
  }
 
+ static Icon CreateEdgeToEdgeAppIcon(){using Icon source=UiIcons.CreateAppIcon(32);using Bitmap original=source.ToBitmap();using Bitmap enlarged=new Bitmap(32,32,System.Drawing.Imaging.PixelFormat.Format32bppArgb);using(Graphics g=Graphics.FromImage(enlarged)){g.Clear(Color.Transparent);g.InterpolationMode=InterpolationMode.HighQualityBicubic;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.DrawImage(original,new Rectangle(0,0,32,32),new Rectangle(3,3,26,26),GraphicsUnit.Pixel);}IntPtr handle=enlarged.GetHicon();try{using Icon temp=Icon.FromHandle(handle);return (Icon)temp.Clone();}finally{DestroyIcon(handle);}}
  void ActivationLoop(){while(!exiting){try{activationEvent.WaitOne();if(exiting)break;if(!menuOwner.IsDisposed)menuOwner.BeginInvoke((Action)ShowLog);}catch{if(exiting)break;}}}
  void ShowTrayMenu(){if(menu.Visible){menu.Close(ToolStripDropDownCloseReason.AppClicked);return;}lastMenuPoint=Cursor.Position;ShowTrayMenuAt(lastMenuPoint);}
  void ShowTrayMenuAt(Point point){menuOwner.Location=point;if(!menuOwner.Visible)menuOwner.Show();menuOwner.Activate();menu.Show(point);}
