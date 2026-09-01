@@ -1,12 +1,27 @@
 @echo off
-cls
 setlocal EnableExtensions EnableDelayedExpansion
 
+rem Run the real installer from TEMP so a fresh Git checkout may safely replace install.cmd itself.
+if /I "%~1"=="--runner" goto :runner
+set "INSTALL_TMP=%TEMP%\sub-install-%RANDOM%-%RANDOM%.cmd"
+copy /y "%~f0" "%INSTALL_TMP%" >nul 2>nul
+if errorlevel 1 (
+    echo ERROR: Could not create temporary installer copy.
+    exit /b 1
+)
+call "%INSTALL_TMP%" --runner "%~dp0" "%~1"
+set "INSTALL_RC=%ERRORLEVEL%"
+del /q "%INSTALL_TMP%" >nul 2>nul
+exit /b %INSTALL_RC%
+
+:runner
+cls
 title Socket Universe Bridge - installer
 
 set "REPO_URL=https://github.com/Suenee/VoicePrompterBridge.git"
 set "BRANCH=devel"
-set "ROOT=%~dp0"
+set "ROOT=%~2"
+set "INSTALL_OPTION=%~3"
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
 
 rem Allow Git operations on mapped/network drives for this installer and all child processes only.
@@ -53,13 +68,13 @@ call :verify_install || goto :fail
 echo.
 echo ============================================
 echo INSTALL OK
- echo Socket Universe Bridge is ready.
+echo Socket Universe Bridge is ready.
 echo EXE: %REPO_DIR%\SocketUniverseBridge.exe
 echo CONFIG: %REPO_DIR%\config\vpbridge.json
 echo ============================================
 >>"%INSTALL_LOG%" echo STATUS: SUCCESS
 
-if /I not "%~1"=="--no-start" (
+if /I not "%INSTALL_OPTION%"=="--no-start" (
     echo Starting Socket Universe Bridge...
     start "" /D "%REPO_DIR%" "%REPO_DIR%\SocketUniverseBridge.exe"
 )
@@ -242,7 +257,7 @@ if "%RC%"=="0" set "RC=1"
 echo.
 echo ============================================
 echo INSTALL FAILED
- echo See: %INSTALL_LOG%
+echo See: %INSTALL_LOG%
 echo ============================================
 if defined INSTALL_LOG >>"%INSTALL_LOG%" echo STATUS: FAILED - exit=%RC%
 popd >nul 2>nul
