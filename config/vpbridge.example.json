@@ -5,9 +5,6 @@
     "vpPath": "/vp",
     "bcPath": "/bc"
   },
-  "security": {
-    "apiKey": ""
-  },
   "logging": {
     "retentionMinutes": 60,
     "debugMode": "off"
