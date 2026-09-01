@@ -19,7 +19,7 @@ export class VPBridgeServer {
   this.logger.debug('Initializing Socket Universe Bridge server');
   this.store=new MailboxStore(config,logger); this.statusWriter=new StatusWriter({serverRunning:false,vpConnected:false,bcConnected:false,mailboxes:this.store.list().map(b=>b.id),host:config.server.host,port:config.server.port});
   this.httpServer.on('upgrade',(request,socket,head)=>{try{const url=new URL(request.url??'/',`http://${request.headers.host??'localhost'}`);const mailbox=this.resolveMailbox(url.pathname);if(!mailbox){this.logger.debug(`Rejected unknown mailbox path ${url.pathname}`);socket.write('HTTP/1.1 404 Not Found\r\n\r\n');socket.destroy();return;}
-   if(config.server.mode==='all'){const supplied=url.searchParams.get('apiKey')??'';const legacy=(mailbox==='vp'&&url.pathname===config.server.vpPath)||(mailbox==='bc'&&url.pathname===config.server.bcPath);if(!(legacy&&this.isLegacyKeyValid(supplied))&&!this.store.validateApiKey(mailbox,supplied)){this.logger.system(`AUTH REJECTED for ${mailbox} from ${request.socket.remoteAddress??'unknown'}`);this.logger.debug(`Authentication rejected for mailbox ${mailbox}`);socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');socket.destroy();return;}}
+   if(config.server.mode==='all'){const supplied=url.searchParams.get('apiKey')??'';if(!this.store.validateApiKey(mailbox,supplied)){this.logger.system(`AUTH REJECTED for ${mailbox} from ${request.socket.remoteAddress??'unknown'}`);this.logger.debug(`Authentication rejected for mailbox ${mailbox}`);socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');socket.destroy();return;}}
    this.wsServer.handleUpgrade(request,socket,head,ws=>this.wsServer.emit('connection',ws,request,mailbox));}catch(e){this.logger.debug('WebSocket upgrade failed',e);socket.destroy();}});
   this.wsServer.on('connection',(ws:WebSocket,_r:http.IncomingMessage,mailbox:string)=>this.attach(mailbox,ws));
  }
@@ -40,6 +40,5 @@ export class VPBridgeServer {
  private sendTo(mailbox:string,payload:string){const ws=this.clients.get(mailbox);if(ws?.readyState===WebSocket.OPEN)ws.send(payload);}
  private sendToAsync(mailbox:string,payload:string){const ws=this.clients.get(mailbox);return !ws||ws.readyState!==WebSocket.OPEN?Promise.resolve():this.send(ws,payload);}
  private send(ws:WebSocket,payload:string){return new Promise<void>((resolve,reject)=>ws.send(payload,e=>e?reject(e):resolve()));}
- private isLegacyKeyValid(key:string){const expected=this.config.security.apiKey;if(!/^[a-fA-F0-9]{64}$/.test(expected)||key.length!==expected.length)return false;try{return crypto.timingSafeEqual(Buffer.from(key),Buffer.from(expected));}catch{return false;}}
  private updateStatus(running:boolean){this.statusWriter.update({serverRunning:running,vpConnected:this.clients.get('vp')?.readyState===WebSocket.OPEN,bcConnected:this.clients.get('bc')?.readyState===WebSocket.OPEN,mailboxes:this.store.list().map(b=>b.id),host:this.config.server.host,port:this.config.server.port});}
 }
