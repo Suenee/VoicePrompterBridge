@@ -89,9 +89,14 @@ export class VPBridgeServer {
     this.httpServer.on('upgrade', (request, socket, head) => {
       try {
         const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
+        const ip = this.normalizeIp(request.socket.remoteAddress ?? 'unknown');
+        const requestedBox = this.connectionAttemptLabel(url.pathname);
+        const attemptId = this.nextMessageId++;
+        this.logger.message(attemptId, requestedBox, 'server', 'RECEIVED', `CONNECT ${ip} ${url.pathname}`);
         const mailbox = this.resolveMailbox(url.pathname);
         if (!mailbox) {
-          this.logger.debug(`Rejected unknown mailbox path ${url.pathname}`);
+          this.logger.message(attemptId, requestedBox, 'server', 'ERROR', `CONNECT REJECTED: Unknown Socket Box path ${url.pathname}; IP ${ip}`);
+          this.logger.debug(`Rejected unknown mailbox path ${url.pathname} from ${ip}`);
           socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
           socket.destroy();
           return;
@@ -99,8 +104,9 @@ export class VPBridgeServer {
         if (config.server.mode === 'all') {
           const supplied = url.searchParams.get('apiKey') ?? '';
           if (!this.store.validateApiKey(mailbox, supplied)) {
-            this.logger.system(`AUTH REJECTED for ${mailbox} from ${request.socket.remoteAddress ?? 'unknown'}`);
-            this.logger.debug(`Authentication rejected for mailbox ${mailbox}`);
+            this.logger.message(attemptId, mailbox, 'server', 'ERROR', `CONNECT REJECTED: Invalid API key; IP ${ip}`);
+            this.logger.system(`AUTH REJECTED for ${mailbox} from ${ip}`);
+            this.logger.debug(`Authentication rejected for mailbox ${mailbox} from ${ip}`);
             socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
             socket.destroy();
             return;
@@ -157,6 +163,13 @@ export class VPBridgeServer {
     return this.store.get(m[1])?.id;
   }
 
+  private connectionAttemptLabel(pathname: string) {
+    const dynamic = /^\/mailbox\/([a-z0-9_-]+)$/i.exec(pathname);
+    if (dynamic) return dynamic[1];
+    const plain = pathname.replace(/^\/+|\/+$/g, '');
+    return /^[a-z0-9_-]+$/i.test(plain) ? plain : 'unknown';
+  }
+
   private attach(mailbox: string, ws: WebSocket, request: http.IncomingMessage) {
     const connection: ConnectionRecord = {
       connectionId: crypto.randomUUID(),
@@ -206,6 +219,7 @@ export class VPBridgeServer {
     const box = this.store.get(connection.socketBox);
     if (!box) return false;
     if (this.activeFor(connection.socketBox).length >= box.maxConnections) {
+      this.logger.message(this.nextMessageId++, connection.socketBox, 'server', 'ERROR', `CONNECT REJECTED: Connection limit reached (${box.maxConnections}); IP ${connection.ip}`);
       this.logger.system(`${connection.socketBox.toUpperCase()} CONNECTION REJECTED: limit ${box.maxConnections}`);
       this.logger.debug(`Legacy admission rejected for ${connection.socketBox}; maxConnections reached`);
       connection.ws.close(4003, 'Socket Box connection limit reached');
@@ -693,6 +707,7 @@ export class VPBridgeServer {
 
   private serverError(connection: ConnectionRecord, m: VppEnvelope, code: string, message: string) {
     this.logger.debug(`Server error for ${connection.socketBox} ${connection.connectionId}: ${code} ${message}`);
+    this.logger.message(this.nextMessageId++, connection.socketBox, 'server', 'ERROR', `${code}: ${message}`);
     if (!m?.id || m.expectsResponse === false) return;
     this.sendRaw(connection, JSON.stringify({
       protocolVersion: 1,
