@@ -101,16 +101,19 @@ export class VPBridgeServer {
           socket.destroy();
           return;
         }
-        if (config.server.mode === 'all') {
-          const supplied = url.searchParams.get('apiKey') ?? '';
-          if (!this.store.validateApiKey(mailbox, supplied)) {
-            this.logger.message(attemptId, mailbox, 'server', 'ERROR', `CONNECT REJECTED: Invalid API key; IP ${ip}`);
-            this.logger.system(`AUTH REJECTED for ${mailbox} from ${ip}`);
-            this.logger.debug(`Authentication rejected for mailbox ${mailbox} from ${ip}`);
-            socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
-            socket.destroy();
-            return;
-          }
+        const box = this.store.get(mailbox);
+        const supplied = url.searchParams.get('apiKey') ?? '';
+        const hasApiKey = !!box?.apiKey;
+        const isLocalhost = ip === '127.0.0.1' || ip === '::1';
+        const authenticated = hasApiKey ? this.store.validateApiKey(mailbox, supplied) : isLocalhost;
+        if (!authenticated) {
+          const reason = hasApiKey ? 'Invalid API key' : 'Socket Box has no API key and remote access is forbidden';
+          this.logger.message(attemptId, mailbox, 'server', 'ERROR', `CONNECT REJECTED: ${reason}; IP ${ip}`);
+          this.logger.system(`AUTH REJECTED for ${mailbox} from ${ip}`);
+          this.logger.debug(`Authentication rejected for mailbox ${mailbox} from ${ip}: ${reason}`);
+          socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+          socket.destroy();
+          return;
         }
         this.wsServer.handleUpgrade(request, socket, head, ws => this.wsServer.emit('connection', ws, request, mailbox));
       } catch (e) {
