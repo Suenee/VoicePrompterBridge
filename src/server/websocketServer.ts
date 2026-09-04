@@ -606,7 +606,7 @@ export class VPBridgeServer {
     const selected = this.findActive(connection.socketBox, selectedId);
     const box = this.store.get(connection.socketBox)!;
     if (selected) {
-      await this.sendServerEventConnection(selected, 'disconnecting', { reason: 'replaced' });
+      void this.sendServerEventConnection(selected, 'disconnecting', { reason: 'replaced' });
       this.removeActive(selected);
       selected.ws.close(4000, 'Replaced by authenticated connection');
     }
