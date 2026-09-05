@@ -1,9 +1,7 @@
 {
   "server": {
     "mode": "local",
-    "port": 8170,
-    "vpPath": "/vp",
-    "bcPath": "/bc"
+    "port": 8170
   },
   "logging": {
     "retentionMinutes": 60,
