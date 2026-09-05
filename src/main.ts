@@ -22,8 +22,17 @@ async function main(): Promise<void> {
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', chunk => {
     for (const rawLine of String(chunk).split(/\r?\n/)) {
-      const line = rawLine.trim().toLowerCase();
-      if (line === 'shutdown' || line === 'restart' || line === 'exit') void shutdown('TRAY', line);
+      const line = rawLine.trim();
+      if (!line) continue;
+      const command = line.toLowerCase();
+      if (command === 'shutdown' || command === 'restart' || command === 'exit') {
+        void shutdown('TRAY', command);
+        continue;
+      }
+      if (command.startsWith('disconnect ')) {
+        const connectionId = line.slice('disconnect '.length).trim();
+        if (connectionId && !shuttingDown) void server.disconnectConnection(connectionId);
+      }
     }
   });
   process.stdin.resume();
