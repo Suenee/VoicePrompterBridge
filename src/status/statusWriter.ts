@@ -1,12 +1,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+export interface RuntimeConnectionStatus {
+  connectionId: string;
+  socketBox: string;
+  ip: string;
+  hostName?: string;
+  service?: string;
+  connectedAt: string;
+}
+
 export interface BridgeRuntimeStatus {
   serverRunning: boolean;
   vpConnected: boolean;
   bcConnected: boolean;
   mailboxes: string[];
   connections: Record<string, boolean>;
+  activeConnections: RuntimeConnectionStatus[];
   host: string;
   port: number;
   updatedAt: string;
