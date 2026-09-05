@@ -347,7 +347,7 @@ export class VPBridgeServer {
         this.serverError(connection, m, 'AMBIGUOUS_RECIPIENT', `Recipient omitted and ${allowed.length} destinations are permitted`);
         return;
       }
-      const target = allowed[0];
+      const target = allowed[0]!;
       m = { ...m, recipient: target };
       delete m.to;
       targets = [target];
