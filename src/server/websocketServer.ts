@@ -82,6 +82,7 @@ export class VPBridgeServer {
       bcConnected: false,
       mailboxes: this.store.list().map(b => b.id),
       connections: this.connectionStates(),
+      activeConnections: [],
       host: config.server.host,
       port: config.server.port,
     });
@@ -158,9 +159,22 @@ export class VPBridgeServer {
     await new Promise<void>(r => this.httpServer.close(() => r()));
   }
 
+  async disconnectConnection(connectionId: string): Promise<boolean> {
+    const connection = this.findActiveById(connectionId);
+    if (!connection) {
+      this.logger.debug(`Tray disconnect ignored; connection not found: ${connectionId}`);
+      return false;
+    }
+    this.logger.system(`${connection.socketBox.toUpperCase()} DISCONNECT REQUESTED for ${connection.ip}`);
+    try { await this.sendServerEventConnection(connection, 'disconnecting', { reason: 'user' }); }
+    catch (e) { this.logger.debug(`Failed to announce user disconnect for ${connection.socketBox} ${connection.connectionId}`, e); }
+    this.removeActive(connection);
+    if (connection.ws.readyState === WebSocket.OPEN) connection.ws.close(4006, 'Disconnected by SUB user');
+    this.updateStatus(true);
+    return true;
+  }
+
   private resolveMailbox(pathname: string) {
-    if (pathname === this.config.server.vpPath) return 'vp';
-    if (pathname === this.config.server.bcPath) return 'bc';
     const m = /^\/mailbox\/([a-z0-9_-]+)$/i.exec(pathname);
     if (!m) return undefined;
     return this.store.get(m[1])?.id;
@@ -296,6 +310,7 @@ export class VPBridgeServer {
       this.serverError(connection, m, 'INVALID_MESSAGE', 'Missing/invalid VPP envelope or from mismatch');
       return;
     }
+    if (!connection.service && typeof m.source?.app === 'string' && m.source.app.trim()) connection.service = m.source.app.trim();
 
     if (!connection.admitted && !connection.negotiating) {
       if (m.recipient === 'server' && m.type === 'call' && m.method === 'registerConnection') {
@@ -576,6 +591,7 @@ export class VPBridgeServer {
 
     if (connection.admitted) {
       connection.legacy = false;
+      this.updateStatus(true);
       this.sendResponse(connection, m, this.admittedResult(connection));
       return;
     }
@@ -798,6 +814,19 @@ export class VPBridgeServer {
     return states;
   }
 
+  private activeConnectionDetails() {
+    return [...this.socketConnections.values()]
+      .filter(c => c.admitted && c.ws.readyState === WebSocket.OPEN)
+      .map(c => ({
+        connectionId: c.connectionId,
+        socketBox: c.socketBox,
+        ip: c.ip,
+        ...(c.hostName ? { hostName: c.hostName } : {}),
+        ...(c.service ? { service: c.service } : {}),
+        connectedAt: c.connectedAt,
+      }));
+  }
+
   private updateStatus(running: boolean) {
     const states = this.connectionStates();
     this.statusWriter.update({
@@ -806,6 +835,7 @@ export class VPBridgeServer {
       bcConnected: states.bc === true,
       mailboxes: this.store.list().map(b => b.id),
       connections: states,
+      activeConnections: this.activeConnectionDetails(),
       host: this.config.server.host,
       port: this.config.server.port,
     });
