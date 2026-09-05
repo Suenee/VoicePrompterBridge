@@ -303,8 +303,8 @@ export class VPBridgeServer {
       return;
     }
 
-    const preliminaryTarget = m.recipient ?? (typeof m.to === 'string' ? m.to : Array.isArray(m.to) ? m.to.join(',') : 'server');
-    this.logger.message(logId, connection.socketBox, preliminaryTarget || 'server', 'RECEIVED', payload);
+    const preliminaryTarget = m.recipient ?? (typeof m.to === 'string' ? m.to : Array.isArray(m.to) ? m.to.join(',') : 'auto');
+    this.logger.message(logId, connection.socketBox, preliminaryTarget || 'auto', 'RECEIVED', payload);
 
     if (m.protocolVersion !== 1 || !m.id || !m.type || m.from !== connection.socketBox) {
       this.serverError(connection, m, 'INVALID_MESSAGE', 'Missing/invalid VPP envelope or from mismatch');
@@ -334,15 +334,28 @@ export class VPBridgeServer {
       return;
     }
 
+    let targets = this.targets(m);
+    if (targets.length === 0) {
+      const allowed = (this.store.get(connection.socketBox)?.allowedRecipients ?? [])
+        .filter(target => target.toLowerCase() !== connection.socketBox.toLowerCase() && !!this.store.get(target));
+      if (allowed.length === 0) {
+        this.serverError(connection, m, 'INVALID_ROUTING', 'No permitted destination Socket Box');
+        return;
+      }
+      if (allowed.length > 1) {
+        this.serverError(connection, m, 'AMBIGUOUS_RECIPIENT', `Recipient omitted and ${allowed.length} destinations are permitted`);
+        return;
+      }
+      m.recipient = allowed[0]!;
+      delete m.to;
+      targets = [m.recipient];
+      this.logger.debug(`Recipient resolved from Socket Box routing: ${connection.socketBox} -> ${m.recipient}`);
+    }
+
     if (m.correlationId && ['progress', 'response', 'error'].includes(m.type)) {
       if (this.routeCorrelatedReply(connection, m, logId)) return;
     }
 
-    const targets = this.targets(m);
-    if (targets.length === 0) {
-      this.serverError(connection, m, 'INVALID_ROUTING', 'No valid recipient');
-      return;
-    }
     if (targets.length > 1 && m.expectsResponse === true) {
       this.serverError(connection, m, 'INVALID_ROUTING', 'A response-requesting message must have one recipient');
       return;
