@@ -586,9 +586,15 @@ export class VPBridgeServer {
       this.serverError(connection, m, 'UNKNOWN_METHOD', 'Unsupported server request');
       return;
     }
+    const caller = this.store.get(connection.socketBox);
     const boxes: Record<string, { connected: boolean }> = {};
-    for (const b of this.store.list()) boxes[b.id] = { connected: this.activeFor(b.id).length > 0 };
-    const hb = (this.store.get(connection.socketBox)?.heartbeatSeconds ?? 30) * 1000;
+    for (const target of caller?.allowedRecipients ?? []) {
+      if (target.toLowerCase() === connection.socketBox.toLowerCase()) continue;
+      const box = this.store.get(target);
+      if (!box) continue;
+      boxes[box.id] = { connected: this.activeFor(box.id).length > 0 };
+    }
+    const hb = (caller?.heartbeatSeconds ?? 30) * 1000;
     this.sendResponse(connection, m, { mailboxes: boxes, heartbeat: { intervalMs: hb } });
   }
 
