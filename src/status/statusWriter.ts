@@ -8,6 +8,8 @@ export interface RuntimeConnectionStatus {
   hostName?: string;
   service?: string;
   connectedAt: string;
+  state?: 'connected' | 'negotiating';
+  expiresAt?: string;
 }
 
 export interface BridgeRuntimeStatus {
