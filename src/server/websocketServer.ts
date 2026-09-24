@@ -303,7 +303,12 @@ export class VPBridgeServer {
       return;
     }
 
-    const preliminaryTarget = m.recipient ?? (typeof m.to === 'string' ? m.to : Array.isArray(m.to) ? m.to.join(',') : 'auto');
+    let preliminaryTarget = m.recipient ?? (typeof m.to === 'string' ? m.to : Array.isArray(m.to) ? m.to.join(',') : '');
+    if (!preliminaryTarget && m.protocolVersion === 1 && m.id && m.type && m.from === connection.socketBox) {
+      const allowed = (this.store.get(connection.socketBox)?.allowedRecipients ?? [])
+        .filter(target => target.toLowerCase() !== connection.socketBox.toLowerCase() && !!this.store.get(target));
+      if (allowed.length === 1) preliminaryTarget = allowed[0]!;
+    }
     this.logger.message(logId, connection.socketBox, preliminaryTarget || 'auto', 'RECEIVED', payload);
 
     if (m.protocolVersion !== 1 || !m.id || !m.type || m.from !== connection.socketBox) {
