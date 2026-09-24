@@ -249,7 +249,10 @@ try {
     Set-Phase 'COMPLETE'
     Remove-Item $BuildRoot -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item $BackupExe -Force -ErrorAction SilentlyContinue
     Info "Upgrade log: $UpgradeLog"
+    Write-Line '============================================================' Green
     Write-Line 'STATUS: SUCCESS - phase=COMPLETE' Green
+    Write-Line ("Socket Universe Bridge: {0}" -f $AppVersion) Green
+    Write-Line '============================================================' Green
     exit 0
 }
 catch{
